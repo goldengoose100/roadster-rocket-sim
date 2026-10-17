@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Roadster Rocket Sim · Update</title>
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; background: #07090b; color: #eef2f5; font: 15px/1.45 "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; height: 100vh; }
+.box { width: 440px; display: grid; gap: 12px; }
+.eb { font: 700 12px/1 "Segoe UI", sans-serif; letter-spacing: .2em; color: #7fe3ff; text-transform: uppercase; }
+h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: .02em; }
+h1 em { font-style: normal; color: #e0242f; }
+.v { color: #8d9aa6; font-size: 13px; }
+ul { margin: 0; padding-left: 1.2em; color: #c9d3da; max-height: 110px; overflow: auto; }
+.bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7fe3ff, #e8fbff); transition: width .15s; }
+#st { min-height: 1.3em; color: #8d9aa6; font-size: 13px; }
+.row { display: flex; gap: 8px; }
+button { font: 700 14px "Segoe UI", sans-serif; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(196,220,235,.2); background: rgba(255,255,255,.06); color: #eef2f5; cursor: pointer; }
+button.p { background: #eef2f5; color: #06090c; border-color: transparent; }
+button:disabled { opacity: .5; cursor: default; }
+</style></head><body>
+<div class="box">
+  <div class="eb">Update available</div>
+  <h1>Roadster <em>Rocket</em> Sim</h1>
+  <div class="v" id="ver"></div>
+  <ul id="notes"></ul>
+  <div class="bar" id="barw" hidden><i id="bar"></i></div>
+  <div id="st"></div>
+  <div class="row"><button class="p" id="go">Update now</button><button id="skip">Play without updating</button></div>
+</div>
+<script>
+const info = JSON.parse(new URLSearchParams(location.search).get('info') || '{}');
+const $ = (id) => document.getElementById(id);
+$('ver').textContent = `Version ${info.version} · you have ${info.current}${info.size ? ' · ' + (info.size / 1e6).toFixed(1) + ' MB' : ''}`;
+for (const n of info.notes || []) { const li = document.createElement('li'); li.textContent = n; $('notes').appendChild(li); }
+if (info.needsFullDownload) { $('st').textContent = 'This update changes the app itself, so it needs a new download.'; $('go').textContent = 'Open download page'; }
+window.updater.onProgress((p) => { $('barw').hidden = false; $('bar').style.width = Math.round(p * 100) + '%'; $('st').textContent = 'Downloading… ' + Math.round(p * 100) + '%'; });
+$('go').onclick = async () => {
+  if (info.needsFullDownload) { window.updater.openDownloadPage(); return; }
+  $('go').disabled = true; $('skip').disabled = true; $('st').textContent = 'Downloading…';
+  const r = await window.updater.install();
+  if (r.ok) { $('bar').style.width = '100%'; $('st').textContent = 'Installed. Starting the game…'; }
+  else { $('st').textContent = 'Update failed: ' + r.error + '. You can still play.'; $('go').disabled = false; $('skip').disabled = false; }
+};
+$('skip').onclick = () => window.updater.skip();
+</script>
+</body></html>

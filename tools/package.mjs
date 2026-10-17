@@ -17,7 +17,7 @@ execFileSync('node', [resolve(root, 'tools/build.mjs'), '--offline'], { stdio: '
 // stage only what the app needs
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
-for (const f of ['package.json', 'main.cjs', 'preload.cjs', 'app']) cpSync(resolve(desk, f), resolve(stage, f), { recursive: true });
+for (const f of ['package.json', 'main.cjs', 'preload.cjs', 'updater.html', 'app']) cpSync(resolve(desk, f), resolve(stage, f), { recursive: true });
 
 const platforms = ['win32', ...(process.argv.includes('--linux') ? ['linux'] : [])];
 for (const platform of platforms) {

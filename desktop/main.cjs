@@ -35,7 +35,8 @@ function pickGame() {
   return bundled;
 }
 
-let win = null, current = null, booted = false, bootTimer = null, notice = null, latest = null;
+let win = null, current = null, booted = false, bootTimer = null, notice = null, latest = null, upWin = null;
+const CHECK_EVERY = 20 * 60 * 1000;
 
 function load(entry) {
   current = entry; booted = false;
@@ -109,7 +110,7 @@ async function installUpdate() {
       const { done, value } = await reader.read();
       if (done) break;
       parts.push(Buffer.from(value)); got += value.length;
-      if (total && win) win.webContents.send('update-progress', Math.min(1, got / total));
+      if (total) for (const w of [win, upWin]) if (w) w.webContents.send('update-progress', Math.min(1, got / total));
     }
     const buf = Buffer.concat(parts);
     if (sha256(buf) !== m.sha256) return { ok: false, error: 'the download was corrupted (fingerprint mismatch)' };
@@ -120,7 +121,6 @@ async function installUpdate() {
     state.previous = state.installed && usable(state.installed, state) ? state.installed : null;
     state.installed = { version: m.version, file, sha256: m.sha256 };
     writeState(state);
-    setTimeout(() => load(pickGame()), 1200);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.name === 'AbortError' ? 'download timed out' : 'connection lost' };
@@ -133,15 +133,39 @@ ipcMain.on('booted', async () => {
   if (notice && win) { win.webContents.send('notice', notice); notice = null; }
   // keep the previous version around only until the new one has started once
   if (!current.bundled) { const s = readState(); if (s.installed && s.installed.version === current.version) { s.verified = current.version; writeState(s); } }
-  setTimeout(async () => { const r = await checkForUpdates(); if (r.available && win) win.webContents.send('update-available', r); }, 2500);
 });
 ipcMain.handle('check-updates', () => checkForUpdates());
-ipcMain.handle('install-update', () => installUpdate());
+ipcMain.handle('install-update', async () => { const r = await installUpdate(); if (r.ok) setTimeout(() => load(pickGame()), 1200); return r; });
+
+// ---------- separate update window: shown at launch, or the game closes when an update appears ----------
+function showUpdater(info) {
+  if (upWin) return;
+  if (win) { const w = win; win = null; w.destroy(); }
+  upWin = new BrowserWindow({
+    width: 520, height: 420, resizable: false, maximizable: false, backgroundColor: '#07090b', title: 'Roadster Rocket Sim · Update', autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.cjs') },
+  });
+  upWin.loadFile(path.join(__dirname, 'updater.html'), { query: { info: JSON.stringify({ ...info, current: current ? current.version : bundled.version }) } });
+  upWin.on('closed', () => { upWin = null; if (!win) startGame(); });
+}
+ipcMain.handle('updater-install', async () => {
+  const r = await installUpdate();
+  if (r.ok) setTimeout(() => { if (upWin) upWin.close(); }, 900);
+  return r;
+});
+ipcMain.on('updater-skip', () => { if (upWin) upWin.close(); });
+function startGame() { if (!win) createWindow(); }
+async function launchCheck() {
+  current = pickGame();
+  const r = await Promise.race([checkForUpdates(), new Promise(res => setTimeout(() => res({}), 5000))]);
+  if (r.available) showUpdater(r); else startGame();
+}
+setInterval(async () => { if (!win || !booted) return; const r = await checkForUpdates(); if (r.available) showUpdater(r); }, CHECK_EVERY);
 ipcMain.on('open-download', () => shell.openExternal(DOWNLOAD_PAGE));
 
 app.whenReady().then(() => {
   storeDir = path.join(app.getPath('userData'), 'game-updates');
   statePath = path.join(storeDir, 'state.json');
-  createWindow();
+  launchCheck();
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { if (!upWin && !win) app.quit(); });

@@ -2,6 +2,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const info = ipcRenderer.sendSync('get-info');
+contextBridge.exposeInMainWorld('updater', {
+  install: () => ipcRenderer.invoke('updater-install'),
+  skip: () => ipcRenderer.send('updater-skip'),
+  openDownloadPage: () => ipcRenderer.send('open-download'),
+  onProgress: (cb) => ipcRenderer.on('update-progress', (_e, p) => cb(p)),
+});
 contextBridge.exposeInMainWorld('desktop', {
   gameVersion: info.gameVersion,
   shellVersion: info.shellVersion,
