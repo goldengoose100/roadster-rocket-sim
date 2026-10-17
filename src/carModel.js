@@ -389,7 +389,7 @@ export function buildCar(paint) {
   // headlights (switched on at sunset / night)
   const headlights = [];
   for (const sgn of [1, -1]) {
-    const L = new THREE.SpotLight('#e8f2ff', 0, 140, 0.42, 0.55, 1.6);
+    const L = new THREE.SpotLight('#e8f2ff', 0, 160, 0.5, 0.7, 1.2);
     L.position.set(sgn * 0.62, GROUND + 0.55, 2.0);
     L.target.position.set(sgn * 1.2, GROUND - 1.5, 26);
     group.add(L); group.add(L.target);

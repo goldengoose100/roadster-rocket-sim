@@ -651,7 +651,7 @@ async function boot(hotData = {}) {
     fog.color.setRGB(...t.fog);
     envGround.color.setRGB(0.38 * t.sunI / 3.9 + 0.02, 0.3 * t.sunI / 3.9 + 0.02, 0.22 * t.sunI / 3.9 + 0.03);
     renderer.toneMappingExposure = t.exp;
-    for (const L of model.headlights) L.intensity = t.lights * 2600;
+    for (const L of model.headlights) L.intensity = t.lights * 320;
     model.mats.head.emissiveIntensity = t.lights ? 6 : 3.2;
     rebuildEnv();
   };
