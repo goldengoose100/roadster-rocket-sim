@@ -1,0 +1,37 @@
+// Game running -> update published -> game closes -> update window pops up -> Update now -> new version loads.
+import { _electron } from '/opt/node-tools/node_modules/playwright/index.mjs';
+import { createServer } from 'node:http';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('..', import.meta.url));
+const work = resolve(process.argv[2] || '/tmp', 'live'); rmSync(work, { recursive: true, force: true });
+const srv = resolve(work, 's'); mkdirSync(srv, { recursive: true });
+const server = createServer((q, r) => { const f = resolve(srv, '.' + q.url.split('?')[0]); if (!existsSync(f)) { r.writeHead(404); r.end(); return; } const b = readFileSync(f); r.writeHead(200, { 'content-length': b.length }); r.end(b); });
+await new Promise(r => server.listen(0, r));
+const app = await _electron.launch({ executablePath: resolve(root, 'desktop/out/Roadster Rocket Sim-linux-x64/roadster-rocket-sim'), args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  env: { ...process.env, XDG_CONFIG_HOME: resolve(work, 'h'), ROADSTER_UPDATE_URL: `http://localhost:${server.address().port}/`, ROADSTER_CHECK_EVERY: '8000' } });
+let appClosed = false; app.on('close', () => { appClosed = true; });
+const game = await app.firstWindow(); game.setDefaultTimeout(180000);
+let gameClosed = false; game.on('close', () => { gameClosed = true; });
+await game.waitForFunction(() => window.__sim && document.getElementById('loading').hidden);
+const v0 = await game.evaluate(() => window.desktop.gameVersion);
+console.log('1. game running on', v0);
+const html = readFileSync(resolve(root, 'desktop/app/index.html'), 'utf8').replace('<title>', '<meta name="test-build" content="9.9.9"><title>');
+writeFileSync(resolve(srv, 'game-9.9.9.html'), html);
+writeFileSync(resolve(srv, 'latest.json'), JSON.stringify({ version: '9.9.9', file: 'game-9.9.9.html', sha256: createHash('sha256').update(html).digest('hex'), size: html.length, minShell: '1.1.0', notes: ['Live update test'] }));
+console.log('2. update 9.9.9 published while playing');
+const up = await app.waitForEvent('window', { timeout: 60000 });
+await up.waitForSelector('#go');
+console.log('3. update window popped up:', await up.title(), '| game window closed:', gameClosed, '| app still running:', !appClosed);
+await up.screenshot({ path: resolve(work, 'popup.png') });
+const nextGame = app.waitForEvent('window', { timeout: 120000 });
+await up.click('#go');
+const g2 = await nextGame; g2.setDefaultTimeout(180000);
+await g2.waitForFunction(() => window.__sim && document.getElementById('loading').hidden);
+const v1 = await g2.evaluate(() => window.desktop.gameVersion + ' / marker ' + (document.querySelector('meta[name=test-build]')?.content || 'none'));
+console.log('4. after Update now, game reopened on', v1);
+const ok = gameClosed && !appClosed && v1.startsWith('9.9.9') && v1.endsWith('9.9.9');
+console.log(ok ? 'PASS: live update works end to end' : 'FAIL');
+await app.close(); server.close();

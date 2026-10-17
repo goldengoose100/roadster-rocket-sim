@@ -36,7 +36,7 @@ function pickGame() {
 }
 
 let win = null, current = null, booted = false, bootTimer = null, notice = null, latest = null, upWin = null;
-const CHECK_EVERY = 20 * 60 * 1000;
+const CHECK_EVERY = Number(process.env.ROADSTER_CHECK_EVERY) || 90 * 1000;
 
 function load(entry) {
   current = entry; booted = false;
@@ -84,7 +84,14 @@ async function fetchWithTimeout(url, ms = 15000) {
 }
 async function checkForUpdates() {
   try {
-    const res = await fetchWithTimeout(UPDATE_BASE + 'latest.json?t=' + Date.now());
+    // GitHub's API is never cached, so new versions show up right away; fall back to the raw file
+    let res = null;
+    if (!process.env.ROADSTER_UPDATE_URL) {
+      try { res = await fetchWithTimeout(`https://api.github.com/repos/${REPO}/contents/updates/latest.json?ref=main`, 10000); } catch (_) { res = null; }
+      if (res && !res.ok) res = null;
+      if (res) { const j = await res.json(); res = { ok: true, json: async () => JSON.parse(Buffer.from(j.content, 'base64').toString('utf8')) }; }
+    }
+    if (!res) res = await fetchWithTimeout(UPDATE_BASE + 'latest.json?t=' + Date.now());
     if (!res.ok) return { error: `server said ${res.status}` };
     const m = await res.json();
     if (!validVersion(m.version) || !/^game-[\d.]+\.html$/.test(m.file || '') || !/^[0-9a-f]{64}$/.test(m.sha256 || '')) return { error: 'the update info is malformed' };
@@ -140,13 +147,15 @@ ipcMain.handle('install-update', async () => { const r = await installUpdate(); 
 // ---------- separate update window: shown at launch, or the game closes when an update appears ----------
 function showUpdater(info) {
   if (upWin) return;
-  if (win) { const w = win; win = null; w.destroy(); }
+  const gameWin = win; win = null;
   upWin = new BrowserWindow({
     width: 520, height: 420, resizable: false, maximizable: false, backgroundColor: '#07090b', title: 'Roadster Rocket Sim · Update', autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.cjs') },
   });
   upWin.loadFile(path.join(__dirname, 'updater.html'), { query: { info: JSON.stringify({ ...info, current: current ? current.version : bundled.version }) } });
   upWin.on('closed', () => { upWin = null; if (!win) startGame(); });
+  // close the game only after the update window exists, or the app would quit
+  if (gameWin) gameWin.destroy();
 }
 ipcMain.handle('updater-install', async () => {
   const r = await installUpdate();
