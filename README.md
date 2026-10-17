@@ -3,6 +3,20 @@
 An unofficial, fan-made 3D physics sim of the new Tesla Roadster (revealed Oct 15, 2026) and its
 cold-gas thruster package, as a Windows desktop app. Not affiliated with Tesla or SpaceX.
 
+**[⬇ Download the latest version for Windows](https://github.com/goldengoose100/roadster-rocket-sim/releases/latest)**
+
+Drive it, fly it on 10 thrusters, ride walls with fan suction, loop the loop, and blow up a whole village
+with roof-mounted rockets. Real physics: suspension, tire slip, 4,700 kg of fan downforce, 250 kg of air
+that actually runs out, and buildings that collapse block by block.
+
+![Start screen](docs/start.png)
+
+| | |
+|---|---|
+| ![Loop of Death](docs/loop.png) | ![Wall ride](docs/wall-ride.png) |
+| ![Rockets and destruction](docs/destruction.png) | ![Hovering after the 170° ramp flip](docs/hover.png) |
+| ![Night driving](docs/night.png) | |
+
 ## Download
 
 Get the latest Windows zip from this repository's **Releases** page (or from whoever shared it with you).
