@@ -1,11 +1,11 @@
 {
-  "version": "1.1.1",
-  "file": "game-1.1.1.html",
-  "sha256": "6f4201133824821239da5f509bc2011f7cf00c4037c166834b724f4899210354",
-  "size": 1192263,
+  "version": "1.1.2",
+  "file": "game-1.1.2.html",
+  "sha256": "051b796cc54e6533efffe33b8d3d01dc591dea4688f59758c1ed3beaf088ee76",
+  "size": 1192241,
   "minShell": "1.1.0",
   "date": "2026-10-17",
   "notes": [
-    "Night headlights are much dimmer so you can actually see the road"
+    "Fixed the freeze when something blows up near you"
   ]
 }

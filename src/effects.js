@@ -171,8 +171,7 @@ export class Effects {
     this.lights = [];
     for (let i = 0; i < 3; i++) {
       const l = new THREE.PointLight('#ffb466', 0, 90, 2);
-      l.visible = false;
-      scene.add(l);
+      scene.add(l); // always visible at intensity 0: toggling lights recompiles every shader (freeze)
       this.lights.push({ l, t: 0, max: 0 });
     }
     // shockwave rings
@@ -244,7 +243,7 @@ export class Effects {
       r.t = 0; r.r = radius * 3.2; r.m.visible = true; r.m.position.set(pos.x, gh + 0.3, pos.z);
     }
     const L = this.lights.find(l => l.t <= 0) || this.lights[0];
-    L.l.position.copy(pos); L.l.position.y += 1.5; L.t = 0.45; L.max = 22000 * power * s * s; L.l.visible = true;
+    L.l.position.copy(pos); L.l.position.y += 1.5; L.t = 0.45; L.max = 22000 * power * s * s;
   }
 
   // nuke: big flash, fireball, rising stem and a mushroom cap
@@ -269,7 +268,7 @@ export class Effects {
       }
     } });
     const L = this.lights[0];
-    L.l.position.set(pos.x, pos.y + 25, pos.z); L.t = 1.6; L.max = 2.5e6; L.l.distance = 900; L.l.visible = true;
+    L.l.position.set(pos.x, pos.y + 25, pos.z); L.t = 1.6; L.max = 2.5e6; L.l.distance = 900;
     this.trauma = 1;
   }
 
@@ -283,7 +282,7 @@ export class Effects {
     this.smoke.update(dt);
     this.fire.update(dt);
     for (const L of this.lights) {
-      if (L.t > 0) { L.t -= dt; L.l.intensity = L.max * Math.max(0, Math.min(1, L.t / 0.45)) ** 2; if (L.t <= 0) { L.l.visible = false; L.l.intensity = 0; L.l.distance = 90; } }
+      if (L.t > 0) { L.t -= dt; L.l.intensity = L.max * Math.max(0, Math.min(1, L.t / 0.45)) ** 2; if (L.t <= 0) { L.l.intensity = 0; L.l.distance = 90; } }
     }
     for (const r of this.rings) {
       if (r.t >= 1) continue;

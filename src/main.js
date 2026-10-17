@@ -902,6 +902,7 @@ async function boot(hotData = {}) {
     fireAt(x, y, z) { if (!weapons.equipped) weapons.equip(); return weapons.tryFire(model, vehicle, new THREE.Vector3(x, y, z)); },
     setCam(m) { rig.mode = m; rig.snap(); },
     renderInfo() { renderer.info.autoReset = false; renderer.info.reset(); const t = performance.now(); renderer.render(scene, camera); const ms = performance.now() - t; const r = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ms }; renderer.info.autoReset = true; let meshes = 0; scene.traverse(o => { if (o.isMesh) meshes++; }); r.meshes = meshes; return r; },
+    programs: () => renderer.info.programs.length,
     stats: () => ({ fps: G.fps, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, bodies: destruction.liveCount(), errors: G.errors }),
   };
 }
