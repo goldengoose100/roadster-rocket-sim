@@ -199,6 +199,35 @@ if (want('shock')) {
   await ev(() => window.__sim.destruction.rebuild());
 }
 
+// ---------- railgun ----------
+if (want('rail')) {
+  await ev(() => { const S = window.__sim; S.destruction.rebuild(); S.teleport(8); });
+  await step(1.5, {});
+  await ev(() => { const S = window.__sim; S.weapons.equip(); });
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => window.__sim.weapons.mode === 'rail', null, { timeout: 30000 }).catch(() => {});
+  const mode = await ev(() => window.__sim.weapons.mode);
+  const before = await ev(() => window.__sim.destruction.blocks.filter(b => b.state === 'static').length);
+  await cam([600, 14, -610], [560, 2, -705], 55);
+  const fired = await ev(() => window.__sim.fireAt(560, 2.5, -705));
+  await page.waitForTimeout(150);
+  await freeze(); await shot('31-railgun-beam', 500); await unfreeze();
+  await ev(() => window.__sim.step(240 * 2, {}));
+  const again = await ev(() => window.__sim.fireAt(640, 3, -770));
+  await ev(() => window.__sim.step(240 * 2, {}));
+  await shot('32-railgun-through-building', 600);
+  const after = await ev(() => window.__sim.destruction.blocks.filter(b => b.state === 'static').length);
+  check('Tab switches to the railgun and the beam pierces walls', mode === 'rail' && fired && before - after > 4, `mode ${mode}, blocks broken ${before - after}`);
+  check('railgun can\'t fire again while recharging', await ev(() => { const w = window.__sim.weapons; w.railCharge = 1; return !window.__sim.fireAt(640, 3, -770); }), '');
+  await ev(() => { window.__sim.weapons.railCharge = 0; });
+  await ev(() => { window.__sim.step(240 * 2, {}); });
+  check('railgun recharged and fires again', await ev(() => window.__sim.fireAt(640, 3, -770)), '');
+  await page.keyboard.press('Tab');
+  check('Tab back to rockets', await page.waitForFunction(() => window.__sim.weapons.mode === 'rocket', null, { timeout: 30000 }).then(() => true).catch(() => false));
+  await camOff();
+  await ev(() => window.__sim.destruction.rebuild());
+}
+
 // ---------- slipstream (pace car) ----------
 if (want('draft')) {
   await ev(() => window.__sim.teleport(2)); await step(1);

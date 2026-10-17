@@ -214,8 +214,9 @@ export class HUD {
     const am = this.el.ammo;
     am.hidden = !w.equipped;
     if (w.equipped) {
-      const key = w.ammo + '|' + (w.reload > 0);
-      if (am.dataset.k !== key) {
+      const key = w.mode === 'rail' ? 'rail' + Math.ceil(w.railCharge * 10) : w.ammo + '|' + (w.reload > 0);
+      if (am.dataset.k !== key && w.mode === 'rail') { am.dataset.k = key; am.textContent = w.railCharge > 0 ? `RAILGUN CHARGING ${Math.round((1 - w.railCharge / w.railTime) * 100)}%` : 'RAILGUN READY · TAB = ROCKETS'; }
+      else if (am.dataset.k !== key) {
         am.dataset.k = key;
         am.innerHTML = w.reload > 0 ? 'RELOADING' : 'ROCKETS ' + Array.from({ length: w.mag }, (_, i) => `<i class="${i < w.ammo ? '' : 'used'}"></i>`).join('');
       }

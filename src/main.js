@@ -284,7 +284,7 @@ async function boot(hotData = {}) {
   };
   destruction.glass.onShatter = (p, n) => sound.glass(camera.position.distanceTo(p), n);
   destruction.onImpact = (pos, speed) => { if (camera.position.distanceTo(pos) < 60) sound.impact(Math.min(8, speed * 0.6)); };
-  weapons.onFire = () => { sound.launch(); rig.fovKick -= 1.5; };
+  weapons.onFire = (p, kind) => { if (kind === 'rail') { sound.tone(180, 0.5, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 3000, 0.7, 0.4); rig.trauma = Math.min(1, rig.trauma + 0.3); rig.fovKick -= 4; } else { sound.launch(); rig.fovKick -= 1.5; } };
   weapons.onPickup = () => {
     model.launcher.group.visible = true;
     sound.pickup();
@@ -522,6 +522,7 @@ async function boot(hotData = {}) {
       if (code === 'Minus' || code === 'NumpadSubtract') continue; // handled instantly below
       if (hacks.key(code)) continue;
       if (code === 'KeyQ' || code === 'KeyE') { G.rollTap = code === 'KeyE' ? 1 : -1; continue; }
+      if (code === 'Tab' && weapons.equipped) { const m = weapons.toggleMode(); hud.toast(m === 'rail' ? 'Railgun · pierces buildings · click or B' : 'Rocket launcher', 'warn', 1500); continue; }
       if (code === 'KeyV') hud.toast(CAMERA_MODES[rig.mode = (rig.mode + 1) % CAMERA_MODES.length] + ' camera', '', 1200), rig.snap();
       else if (code === 'KeyR') resetUpright();
       else if (code === 'KeyF') { const m = ['auto', 'max', 'off']; vehicle.fan.mode = m[(m.indexOf(vehicle.fan.mode) + 1) % 3]; hud.toast('Fan suction ' + vehicle.fan.mode.toUpperCase(), 'ice', 1400); }

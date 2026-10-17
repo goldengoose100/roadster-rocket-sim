@@ -1,7 +1,7 @@
 // Roof-mounted rocket launcher: pickups, aiming turret, rockets with smoke trails,
 // collision against world + debris, explosions handed to the destruction system.
 import * as THREE from 'three';
-import { raycast, makeHit } from './colliders.js';
+import { raycast, makeHit, queryBox } from './colliders.js';
 import { heightAt } from './terrain.js';
 
 const _hit = makeHit();
@@ -37,6 +37,53 @@ export class Weapons {
     this.muzzleI = 0;
     this.fired = 0;
     this.onFire = null; this.onPickup = null;
+    // railgun: instant beam that pierces buildings (Tab switches weapon)
+    this.mode = 'rocket';
+    this.railCharge = 0; this.railTime = 1.5;
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#9fe8ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.beam.visible = false; this.beam.frustumCulled = false; scene.add(this.beam);
+    this.beamT = 0;
+  }
+  toggleMode() { this.mode = this.mode === 'rocket' ? 'rail' : 'rocket'; return this.mode; }
+
+  fireRail(model, vehicle, target) {
+    if (this.railCharge > 0) return false;
+    const L = model.launcher;
+    model.group.position.copy(vehicle.pos); model.group.quaternion.copy(vehicle.quat); model.group.updateMatrixWorld(true);
+    this.aim(model, target, 1); model.group.updateMatrixWorld(true);
+    const from = new THREE.Vector3().setFromMatrixPosition(L.muzzles[0].matrixWorld);
+    const dir = new THREE.Vector3().subVectors(target, from);
+    if (dir.lengthSq() < 4) dir.copy(vehicle.fwd);
+    dir.normalize();
+    const d = this.d, touched = new Set(), p = new THREE.Vector3();
+    let end = 400;
+    // march along the beam: everything it passes through breaks; only the ground stops it
+    for (let s = 2; s <= 400; s += 0.5) {
+      p.copy(from).addScaledVector(dir, s);
+      if (p.y < heightAt(p.x, p.z)) { end = s; break; }
+      for (const c of queryBox(p.x - 1, p.z - 1, p.x + 1, p.z + 1)) {
+        const o = c.owner;
+        if (!o || o.state !== 'static' || !c.alive || !c.containsPoint(p, 0.35)) continue;
+        if (o.type === 'block') { d.shatter(o, p, 1.4); touched.add(o.struct); }
+        else if (o.type === 'barrel' && !d.pending.includes(o)) { o.fuse = 0.05; d.pending.push(o); }
+        else if (o.type === 'target') d.launchTarget(o, p.clone().addScaledVector(dir, -2), 1.3);
+      }
+      const b = d.bodyHit(p, 0.3);
+      if (b) { b.wake(); b.applyImpulse(dir.clone().multiplyScalar(b.mass * 12), p); }
+    }
+    for (const st of touched) d.collapse(st);
+    const hit = from.clone().addScaledVector(dir, end);
+    if (end < 400) d.explode(hit, 4, 0.8, 'rail');
+    // beam visual
+    this.beam.position.copy(from).addScaledVector(dir, end / 2);
+    this.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    this.beam.scale.set(1, end, 1); this.beam.visible = true; this.beamT = 0.45;
+    for (let i = 0; i < 40; i++) { const q = from.clone().addScaledVector(dir, Math.random() * end); this.fx.fire.spawn(q.x, q.y, q.z, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, 0.4, 0.5, 0.1, 0.6, 0.9, 1, 0.8); }
+    vehicle.applyImpulse(dir.clone().multiplyScalar(-2500), from);
+    this.railCharge = this.hack.rapidFire ? 0.15 : this.railTime;
+    this.fired++;
+    if (this.onFire) this.onFire(from, 'rail');
+    return true;
   }
 
   checkPickups(pickups, carPos) {
@@ -67,6 +114,7 @@ export class Weapons {
   }
 
   tryFire(model, vehicle, target) {
+    if (this.equipped && this.mode === 'rail') return this.fireRail(model, vehicle, target);
     if (!this.equipped || this.cooldown > 0 || this.reload > 0 || this.ammo <= 0) return false;
     const L = model.launcher;
     // use the physics state, not last frame's render transform
@@ -136,6 +184,8 @@ export class Weapons {
       if (b.t <= 0) { this.pendingBlasts.splice(i, 1); this.d.explode(b.pos, b.r, b.power, 'cluster'); }
     }
     if (this.cooldown > 0) this.cooldown -= dt;
+    if (this.railCharge > 0) this.railCharge = Math.max(0, this.railCharge - dt);
+    if (this.beamT > 0) { this.beamT -= dt; this.beam.material.opacity = Math.max(0, this.beamT / 0.45) * 0.9; this.beam.scale.x = this.beam.scale.z = 1 + (0.45 - this.beamT) * 3; if (this.beamT <= 0) this.beam.visible = false; }
     if (this.reload > 0) { this.reload -= dt; if (this.reload <= 0) { this.reload = 0; this.ammo = this.mag; } }
     for (let i = this.rockets.length - 1; i >= 0; i--) {
       const r = this.rockets[i];

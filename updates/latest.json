@@ -1,14 +1,12 @@
 {
-  "version": "2.0.0",
-  "file": "game-2.0.0.html",
-  "sha256": "cb662e24adca81e9c653044ec7ce76c8d7bd178c231273102ed6761c516ca4e3",
-  "size": 1264665,
+  "version": "2.1.0",
+  "file": "game-2.1.0.html",
+  "sha256": "0cb5c356439cde91b082eecc202a8dacaf3e682d9954d516826a9c4a73a080d3",
+  "size": 1267399,
   "minShell": "1.1.0",
   "date": "2026-10-17",
   "notes": [
-    "New Garage: upgrades, paint, wheels, wings and 3 saved builds (start screen or pause menu)",
-    "Earn credits from 0-60 runs, jumps, rings, flips, stunts and destruction",
-    "Physics 2.0: tire heat and wear, crash damage (repair on the HQ pad), wind, slipstream and shockwaves",
-    "Pause menu: switch back to Classic physics any time"
+    "New: railgun! Pick up the launcher, press Tab to switch, and fire a beam straight through buildings",
+    "Tab switches back to rockets; the railgun recharges in 1.5 s"
   ]
 }
