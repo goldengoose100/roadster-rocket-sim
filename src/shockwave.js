@@ -25,6 +25,8 @@ export class Shockwaves {
     this.fronts = [];
     this.vehicle = null;       // the player's car (gets pushed beyond the direct blast zone)
     this.onCar = null;         // (front, dist, strength) => void
+    this.push = 600;           // shove on loose debris per unit of strength (N·s per m² of side area)
+    this.maxDv = 4;            // m/s: outside the blast radius rubble gets nudged, not thrown
   }
   spawn(pos, radius, power) {
     if (!this.enabled) return;
@@ -47,11 +49,12 @@ export class Shockwaves {
         const dist = crossing(b.pos);
         if (dist < 0 || dist <= f.radius) continue;
         const s = strengthAt(f.radius, f.power, dist);
-        if (s < 0.03) continue;
+        if (s < 0.03 || b.age < 0.3) continue;   // fresh debris was already thrown by the blast itself
+        const area = 4 * (b.half.x * b.half.y + b.half.y * b.half.z + b.half.x * b.half.z) / 3;
+        const dv = Math.min(this.maxDv, s * this.push * area / b.mass);
+        if (dv < 0.3) continue;
         b.wake();
         _n.subVectors(b.pos, f.pos).normalize(); _n.y += 0.25; _n.normalize();
-        const area = 4 * (b.half.x * b.half.y + b.half.y * b.half.z + b.half.x * b.half.z) / 3;
-        const dv = Math.min(14, s * 1800 * area / b.mass);
         _p.copy(b.pos).add(_s.set((Math.random() - 0.5) * b.half.x, (Math.random() - 0.5) * b.half.y, (Math.random() - 0.5) * b.half.z));
         b.applyImpulse(_n.multiplyScalar(dv * b.mass), _p);
       }

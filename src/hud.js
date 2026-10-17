@@ -74,15 +74,17 @@ export class HUD {
       const key = col + h.toFixed(0) + (w.flat > 0.3 ? 'f' : '') + (w.broken ? 'b' : '');
       if (key === t.last) return;
       t.last = key;
-      t.fill.setAttribute('fill', col); t.fill.setAttribute('height', h.toFixed(1)); t.fill.setAttribute('y', (t.y + 9.5 - h).toFixed(1));
+      t.fill.style.fill = col; t.fill.setAttribute('height', h.toFixed(1)); t.fill.setAttribute('y', (t.y + 9.5 - h).toFixed(1));
       t.frame.setAttribute('class', 'tire' + (w.broken ? ' gone' : w.flat > 0.3 ? ' flat' : ''));
     });
     const z = v.damage.zones;
     for (const k in this.zonesEl) {
       const d = k === 'top' ? Math.max(z.top, z.bottom) : z[k];
       const col = d < 0.05 ? 'transparent' : d < 0.4 ? '#ffb547' : '#ff4d4d';
-      this.setAttr(this.zonesEl[k], 'stroke', k === 'top' ? 'transparent' : col);
-      if (k === 'top') this.setAttr(this.zonesEl[k], 'fill', d < 0.05 ? 'transparent' : (d < 0.4 ? 'rgba(255,181,71,.25)' : 'rgba(255,77,77,.3)'));
+      // inline style, so it wins over the .zn class
+      const el = this.zonesEl[k];
+      if (k === 'top') { const f = d < 0.05 ? 'transparent' : (d < 0.4 ? 'rgba(255,181,71,.25)' : 'rgba(255,77,77,.3)'); if (el.style.fill !== f) el.style.fill = f; }
+      else if (el.dataset.c !== col) { el.dataset.c = col; el.style.stroke = col; }
     }
     const c = v.damage.condition(v);
     this.el.cond.hidden = c > 0.995;

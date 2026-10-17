@@ -1,12 +1,14 @@
 {
-  "version": "1.1.5",
-  "file": "game-1.1.5.html",
-  "sha256": "91faed1f0326dd48d95c31b7abcdbc61709e0f3a490a289924d8fba05ffd7161",
-  "size": 1192241,
+  "version": "2.0.0",
+  "file": "game-2.0.0.html",
+  "sha256": "cb662e24adca81e9c653044ec7ce76c8d7bd178c231273102ed6761c516ca4e3",
+  "size": 1264665,
   "minShell": "1.1.0",
   "date": "2026-10-17",
   "notes": [
-    "Live test: the game should have closed and shown this window",
-    "After updating, the pause menu (P) says 1.1.5"
+    "New Garage: upgrades, paint, wheels, wings and 3 saved builds (start screen or pause menu)",
+    "Earn credits from 0-60 runs, jumps, rings, flips, stunts and destruction",
+    "Physics 2.0: tire heat and wear, crash damage (repair on the HQ pad), wind, slipstream and shockwaves",
+    "Pause menu: switch back to Classic physics any time"
   ]
 }

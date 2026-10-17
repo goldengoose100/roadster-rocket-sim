@@ -8,6 +8,9 @@ const results = [];
 const check = (name, ok, info) => { results.push({ name, ok, info }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  ${info ?? ''}`); };
 await waitReady(page);
 await page.evaluate(() => window.__sim.startGame());
+// the test drives the physics itself; pause the game's own loop so screenshots taken mid-stunt
+// don't add seconds of 'no keys pressed' physics on slow machines
+await page.evaluate(() => { window.__sim.freeze = true; });
 
 const step = (sec, c) => page.evaluate(([sec, c]) => { window.__sim.step(Math.round(sec * 240), c); }, [sec, c]);
 const state = () => page.evaluate(() => {
@@ -57,6 +60,7 @@ if (want('demo')) {
   await step(1.2, { lift: true });
   await shot('demo-hover');
   await step(6, { descend: true });
+  await step(1, {});   // let the springs settle (Physics 2.0 touches down a fraction later)
   const st = await state();
   landedUpright = st.contacts >= 3 && st.upY > 0.95;
   check('demo ramp: inverted at the top, then flips and lands', minUp < -0.5 && landedUpright, `minUp=${minUp.toFixed(2)} maxY=${maxY.toFixed(1)} final up=${st.upY.toFixed(2)} contacts=${st.contacts}`);
@@ -165,7 +169,7 @@ if (want('weapons')) {
   await shot('destruction-1');
   const after = await page.evaluate(() => ({ stat: window.__sim.destruction.blocks.filter(b => b.state === 'static').length, live: window.__sim.destruction.liveCount(), barrels: window.__sim.destruction.barrels.filter(b => b.state !== 'static').length, cars: window.__sim.destruction.targets.filter(t => t.state !== 'static').length }));
   check('rockets destroy blocks, collapse structures, chain barrels', before - after.stat > 60 && after.barrels >= 2, `blocks knocked out=${before - after.stat}, live bodies=${JSON.stringify(after.live)}, barrels gone=${after.barrels}, cars thrown=${after.cars}`);
-  await step(10, {});
+  await step(15, {});   // with the game loop paused this is the only settling time (classic and 2.0 both < 10 awake by now)
   const settled = await page.evaluate(() => window.__sim.destruction.liveCount());
   const bad = await page.evaluate(() => window.__sim.destruction.bodies.filter(b => !Number.isFinite(b.pos.x + b.pos.y + b.pos.z)).length);
   await shot('destruction-settled');
@@ -199,6 +203,7 @@ if (want('fuzz')) {
 }
 
 // real-time rendering for a few seconds to catch render-path errors
+await page.evaluate(() => { window.__sim.freeze = false; });
 await page.evaluate(() => window.__sim.teleport(1));
 await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
 await page.keyboard.press('KeyV'); await page.waitForTimeout(400); await page.keyboard.press('KeyV'); await page.waitForTimeout(400);

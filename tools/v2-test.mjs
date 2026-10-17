@@ -99,8 +99,12 @@ if (want('tires')) {
   await step(2, { throttle: 1 });
   await step(5, { throttle: 1, steer: 1, handbrake: true });
   const t = await ev(() => window.__sim.vehicle.wheels.map(w => Math.round(w.temp)));
+  // keep drifting in real time (keyboard) so the game draws smoke and skid marks
+  for (const k of ['KeyW', 'KeyA', 'KeyX']) await page.keyboard.down(k);
+  await page.waitForTimeout(9000);
   await freeze();
-  await camNear(6, 2.5, 6, 55);
+  for (const k of ['KeyW', 'KeyA', 'KeyX']) await page.keyboard.up(k);
+  await camNear(7, 3, 7, 55);
   await shot('12-drift-hot-tires-smoke', 900);
   await camOff();
   await shot('13a-drift-chase-view', 700);
@@ -180,14 +184,16 @@ if (want('shock')) {
     return { dist: p0.distanceTo(at), moved };
   });
   check('shockwave reaches the car at about the speed of sound', timing.moved > 0 && Math.abs(timing.moved - timing.dist / 343) < 0.06, `${timing.dist.toFixed(0)} m away, jolt after ${timing.moved.toFixed(3)} s (sound would take ${(timing.dist / 343).toFixed(3)} s)`);
-  // a nuke-sized blast seen from far away: the pressure ring sweeps out across the desert
-  await ev(() => { const S = window.__sim; S.destruction.rebuild(); S.vehicle.reset(new S.THREE.Vector3(640, 0.6, -470), Math.PI); S.step(120); });
-  await cam([700, 70, -430], [640, 0, -720], 55);
-  await ev(() => { const S = window.__sim, T = S.THREE; const p = new T.Vector3(630, 2, -720); S.effects.nuke(p); S.destruction.explode(p, 38, 3.5, 'nuke'); });
-  await ev(() => window.__sim.step(Math.round(240 * 0.18), {}));
-  await freeze(); await shot('23a-big-blast-shockwave-ring', 700); await unfreeze();
-  await ev(() => window.__sim.step(Math.round(240 * 0.35), {}));
-  await freeze(); await shot('23b-shockwave-spreading', 700); await unfreeze();
+  // the pressure ring in slow motion: a barrel-sized blast in the open, seen from above
+  await ev(() => { const S = window.__sim; S.destruction.rebuild(); S.vehicle.reset(new S.THREE.Vector3(640, 0.6, -545), Math.PI); S.step(120); });
+  await cam([600, 45, -560], [600, 0, -610], 60);
+  await page.waitForTimeout(800);
+  await ev(() => { const S = window.__sim, T = S.THREE; S.G.timeScale = 0.03; S.destruction.explode(new T.Vector3(600, 1, -610), 9, 1, 'rocket'); });
+  await page.waitForFunction(() => window.__sim.effects.rings.some(r => r.shock && r.shock.age > 0.012), null, { timeout: 60000 });
+  await freeze(); await shot('23a-shockwave-ring-slow-motion', 600);
+  await ev(() => { window.__sim.G.timeScale = 0.03; });
+  await page.waitForFunction(() => window.__sim.effects.rings.some(r => r.shock && r.shock.age > 0.05), null, { timeout: 60000 });
+  await freeze(); await shot('23b-shockwave-spreading', 600); await unfreeze();
   await ev(() => window.__sim.step(240 * 2, {}));
   await camOff();
   await ev(() => window.__sim.destruction.rebuild());

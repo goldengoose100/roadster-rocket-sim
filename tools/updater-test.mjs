@@ -1,6 +1,9 @@
-// End-to-end updater test with the packaged desktop app (linux build of the same code, run under xvfb):
-// update offered -> installed -> survives restart; broken update rolls back; corrupted download refused;
-// offline start is silent; app-shell changes ask for a full download.
+// End-to-end updater test with the packaged desktop app (linux build of the same code, run under xvfb).
+// Since app 1.2.0 an available update opens its own window before the game. Checks: update window ->
+// install -> game on the new version, settings kept, restart stays updated; broken update rolls back and
+// is never offered again; corrupted download is refused and you can still play; offline start is silent
+// and a manual check explains; app-shell changes ask for a full download.
+//   node tools/package.mjs --linux && xvfb-run -a node tools/updater-test.mjs out/
 import { _electron } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
@@ -39,84 +42,90 @@ const V1 = `${MA}.${MI}.${PA + 1}`, V2 = `${MA}.${MI}.${PA + 2}`, V3 = `${MA}.${
 async function launch(env = {}) {
   const app = await _electron.launch({ executablePath: exe, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
     env: { ...process.env, XDG_CONFIG_HOME: home, ROADSTER_UPDATE_URL: URL_BASE, ...env } });
-  const win = await app.firstWindow();
-  win.setDefaultTimeout(180000);
-  await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setSize(900, 560); });
-  return { app, win };
+  const first = await app.firstWindow();
+  first.setDefaultTimeout(240000);
+  await first.waitForLoadState('domcontentloaded');
+  return { app, first, isUpdater: (await first.title()).includes('Update') };
 }
-const ready = (win) => win.waitForFunction(() => window.__sim && document.getElementById('loading').hidden, null, { timeout: 180000 });
+// the update window closes and the game window opens
+const nextGame = async (app) => { const w = await app.waitForEvent('window', { timeout: 240000 }); w.setDefaultTimeout(240000); return w; };
+const ready = (win) => win.waitForFunction(() => window.__sim && document.getElementById('loading').hidden, null, { timeout: 240000 });
 const version = (win) => win.evaluate(() => [window.desktop && window.desktop.gameVersion, document.querySelector('meta[name=test-build]')?.content || 'bundled']);
+const noUpdateWindow = async (app) => { await new Promise(r => setTimeout(r, 6000)); return app.windows().every(w => !w.isClosed() && !w.url().includes('updater.html')); };
 
-// 1. update offered and installed
+// 0. no update published: the game opens straight away on the bundled version; save a setting
+let { app, first, isUpdater } = await launch();
+await ready(first);
+check('starts straight into the game on the bundled version', !isUpdater && (await version(first)).join() === `${BUNDLED},bundled`, (await version(first)).join());
+await first.evaluate(() => localStorage.setItem('rrs.updater-test', 'kept'));
+await app.close();
+
+// 1. update published: its window comes first, Update now installs it and the game opens on it
 publish(V1, marked(V1));
-let { app, win } = await launch();
-await ready(win);
-check('starts on the bundled version', (await version(win)).join() === `${BUNDLED},bundled`, (await version(win)).join());
-await win.evaluate(() => localStorage.setItem('rrs.updater-test', 'kept'));
-await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
-const modal = await win.evaluate(() => ({ shown: !document.getElementById('upd').hidden, title: document.getElementById('upd-title').textContent, ver: document.getElementById('upd-ver').textContent, notes: document.getElementById('upd-notes').textContent }));
-check('update popup appears on launch', modal.shown && modal.notes.includes(V1), JSON.stringify(modal));
-await win.screenshot({ path: resolve(work, '..', 'u-popup.png') });
-await win.click('#upd-go');
-await win.waitForFunction(() => document.querySelector('meta[name=test-build]'), null, { timeout: 120000 }).catch(() => {});
-await ready(win);
-check('update installs and reloads into the new version', (await version(win)).join() === `${V1},${V1}`, (await version(win)).join());
+({ app, first, isUpdater } = await launch());
+const offer = isUpdater ? await first.evaluate(() => ({ ver: document.getElementById('ver').textContent, notes: document.getElementById('notes').textContent })) : null;
+check('update window appears before the game', isUpdater && offer.ver.includes(V1) && offer.notes.includes(V1), JSON.stringify(offer));
+await first.screenshot({ path: resolve(work, '..', 'u-window.png') });
+let game = nextGame(app);
+await first.click('#go');
+let win = await game; await ready(win);
+check('update installs and the game opens on the new version', (await version(win)).join() === `${V1},${V1}`, (await version(win)).join());
 check('saved settings survive the update', await win.evaluate(() => localStorage.getItem('rrs.updater-test') === 'kept'));
 await app.close();
 
 // 2. restart keeps the new version, nothing offered
-({ app, win } = await launch());
-await ready(win);
-check('restart stays on the installed update', (await version(win)).join() === `${V1},${V1}`);
-await win.waitForTimeout(6000);
-check('no popup when already up to date', await win.evaluate(() => document.getElementById('upd').hidden));
+({ app, first, isUpdater } = await launch());
+await ready(first);
+check('restart stays on the installed update', !isUpdater && (await version(first)).join() === `${V1},${V1}`);
+check('no update window when already up to date', await noUpdateWindow(app));
 await app.close();
 
 // 3. broken update rolls back automatically
 publish(V2, '<!doctype html><title>broken</title><p>this build never starts</p>');
-({ app, win } = await launch({ ROADSTER_BOOT_TIMEOUT: '8000' }));
+({ app, first, isUpdater } = await launch({ ROADSTER_BOOT_TIMEOUT: '8000' }));
+game = nextGame(app);
+await first.click('#go');
+win = await game;
 await ready(win);
-await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
-await win.click('#upd-go');
-await win.waitForTimeout(3000);
-await win.waitForFunction(() => window.__sim && document.getElementById('loading').hidden, null, { timeout: 120000 }).catch(() => {});
+const toast = await win.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes("didn't start")), null, { timeout: 60000 }).then(() => true).catch(() => false);
 const after = await version(win);
-const toast = await win.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes("didn't start")), null, { timeout: 20000 }).then(() => true).catch(() => false);
-check('broken update rolls back to the last working version', after.join() === `${V1},${V1}` && toast, `${after.join()} toast=${toast}`);
+check('broken update rolls back to the last working version', isUpdater && after.join() === `${V1},${V1}` && toast, `${after.join()} toast=${toast}`);
 await app.close();
-({ app, win } = await launch());
-await ready(win); await win.waitForTimeout(6000);
-check('the broken version is not offered again', await win.evaluate(() => document.getElementById('upd').hidden));
+({ app, first, isUpdater } = await launch());
+await ready(first);
+check('the broken version is not offered again', !isUpdater && await noUpdateWindow(app));
 await app.close();
 
-// 4. corrupted download is refused
+// 4. corrupted download is refused, you can still play
 publish(V3, marked(V3));
 const man = JSON.parse(readFileSync(resolve(srv, 'latest.json'), 'utf8')); man.sha256 = '0'.repeat(64); writeFileSync(resolve(srv, 'latest.json'), JSON.stringify(man));
-({ app, win } = await launch());
-await ready(win);
-await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
-await win.click('#upd-go');
-await win.waitForFunction(() => document.getElementById('upd-status').textContent.includes('failed'), null, { timeout: 60000 }).catch(() => {});
-const st = await win.evaluate(() => document.getElementById('upd-status').textContent);
-check('corrupted download is refused, game keeps working', st.includes('corrupted') && (await version(win)).join() === `${V1},${V1}`, st);
+({ app, first, isUpdater } = await launch());
+await first.click('#go');
+await first.waitForFunction(() => document.getElementById('st').textContent.includes('failed'), null, { timeout: 120000 }).catch(() => {});
+const st = await first.evaluate(() => document.getElementById('st').textContent);
+game = nextGame(app);
+await first.click('#skip');
+win = await game; await ready(win);
+check('corrupted download is refused, game still opens on the working version', isUpdater && st.includes('corrupted') && (await version(win)).join() === `${V1},${V1}`, st);
 await app.close();
 
-// 5. offline: silent start, manual check reports it
-({ app, win } = await launch({ ROADSTER_UPDATE_URL: 'http://localhost:9/' }));
-await ready(win); await win.waitForTimeout(5000);
-const silent = await win.evaluate(() => document.getElementById('upd').hidden);
-await win.evaluate(() => { window.__sim.startGame(); document.getElementById('upd-check').click(); });
-const offlineToast = await win.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('Could not check')), null, { timeout: 30000 }).then(() => true).catch(() => false);
-check('offline start is silent, manual check explains', silent && offlineToast);
+// 5. offline: silent start, manual check explains
+({ app, first, isUpdater } = await launch({ ROADSTER_UPDATE_URL: 'http://localhost:9/' }));
+await ready(first);
+await first.evaluate(() => { window.__sim.startGame(); document.getElementById('upd-check').click(); });
+const offlineToast = await first.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('Could not check')), null, { timeout: 60000 }).then(() => true).catch(() => false);
+check('offline start is silent, manual check explains', !isUpdater && offlineToast);
 await app.close();
 
 // 6. shell change needs a full download
 publish(VSHELL, marked(VSHELL), { minShell: VSHELL });
-({ app, win } = await launch());
-await ready(win);
-await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
-const full = await win.evaluate(() => [document.getElementById('upd-title').textContent, document.getElementById('upd-go').textContent]);
-check('app-shell updates ask for a full download', full[0].includes('full download') && full[1].includes('download page'), full.join(' | '));
+({ app, first, isUpdater } = await launch());
+const full = isUpdater ? await first.evaluate(() => [document.getElementById('st').textContent, document.getElementById('go').textContent]) : ['', ''];
+check('app-shell updates ask for a full download', full[0].includes('new download') && full[1].includes('download page'), full.join(' | '));
+game = nextGame(app);
+await first.click('#skip');
+win = await game; await ready(win);
+check('"Play without updating" opens the game', (await version(win)).join() === `${V1},${V1}`);
 await app.close();
 
 server.close();
