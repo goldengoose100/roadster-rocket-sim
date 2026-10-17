@@ -1,0 +1,495 @@
+<meta charset="utf-8">
+<title>Roadster Rocket Sim</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-bleed 3D canvas, instrument panels pinned to the four corners like a flight deck,
+   menus as dark glass sheets over the scene. Single deliberate dark look. */
+:root {
+  --ink: #eef2f5;
+  --muted: #8d9aa6;
+  --dim: #5d6873;
+  --glass: rgba(10, 13, 17, 0.62);
+  --glass-strong: rgba(9, 11, 14, 0.9);
+  --line: rgba(196, 220, 235, 0.13);
+  --ice: #7fe3ff;
+  --amber: #ffb547;
+  --red: #ff4d4d;
+  --roadster: #e0242f;
+  --good: #46f0a0;
+  --bg: #07090b;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; overflow: hidden; margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#app { position: fixed; inset: 0; overflow: hidden; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 1.9em; height: 1.75em; padding: 0 .45em; border: 1px solid rgba(255,255,255,.22); border-bottom-width: 2px; border-radius: 5px; font: 600 .78rem/1 var(--f-display); letter-spacing: .04em; background: rgba(255,255,255,.06); color: var(--ink); }
+
+/* ---------- HUD ---------- */
+#hud { position: absolute; inset: 0; pointer-events: none; --gx: max(16px, env(safe-area-inset-left, 0px)); --gxr: max(16px, env(safe-area-inset-right, 0px)); --gt: calc(14px + env(safe-area-inset-top, 0px)); --gb: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.panel { background: var(--glass); border: 1px solid var(--line); border-radius: 10px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.label { font: 600 .68rem/1 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+#tl { position: absolute; left: var(--gx); top: var(--gt); padding: 10px 12px; display: grid; gap: 8px; max-width: min(360px, calc(100vw - 260px)); }
+#tl .brand { display: flex; align-items: baseline; gap: 10px; }
+#tl .brand b { font: 800 1.35rem/1 var(--f-display); letter-spacing: .08em; }
+#tl .brand b i { font-style: normal; color: var(--roadster); }
+#h-mode { font: 700 .8rem/1 var(--f-display); letter-spacing: .14em; padding: 3px 7px; border-radius: 4px; background: rgba(255,255,255,.08); }
+#h-mode[data-m="flight"] { background: var(--ice); color: #041015; }
+#h-mode[data-m="air"] { background: var(--amber); color: #1a0f00; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font: 600 .7rem/1 var(--f-display); letter-spacing: .1em; padding: 4px 7px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.chip[data-on="1"] { color: var(--ink); border-color: rgba(127,227,255,.45); }
+.chip[data-warn="1"] { color: var(--amber); border-color: rgba(255,181,71,.5); }
+
+#zone { position: absolute; left: 50%; top: var(--gt); transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .5s; width: min(560px, calc(100vw - 32px)); }
+#zone.show { opacity: 1; }
+#zone .zn { font: 800 clamp(1.4rem, 3.4vw, 2.4rem)/1 var(--f-display); letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 2px 18px rgba(0,0,0,.6); }
+#zone .zt { margin-top: 6px; font: 500 .95rem/1.3 var(--f-body); color: #d7e1e8; text-shadow: 0 1px 8px rgba(0,0,0,.8); }
+
+#timers { position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--gt) + 78px); display: flex; gap: 16px; padding: 7px 12px; font: 600 .82rem/1 var(--f-display); letter-spacing: .06em; color: var(--muted); white-space: nowrap; }
+#timers b { color: var(--ink); font-weight: 700; }
+#timers .best { color: var(--good); }
+#timers span[hidden] { display: none; }
+
+#tr { position: absolute; right: var(--gxr); top: var(--gt); display: grid; justify-items: end; gap: 6px; }
+#minimap { width: 176px; height: 176px; border-radius: 50%; border: 1px solid var(--line); background: rgba(0,0,0,.35); }
+#compass { font: 600 .74rem/1 var(--f-display); letter-spacing: .12em; color: var(--muted); }
+
+#thr { position: absolute; left: var(--gx); bottom: var(--gb); padding: 12px; display: grid; grid-template-columns: auto auto; gap: 12px; align-items: center; }
+#thr svg.car { width: 78px; height: 150px; overflow: visible; }
+.tdot { fill: #2a333b; stroke: rgba(255,255,255,.25); stroke-width: 1; transition: fill .05s; }
+.air { display: grid; gap: 8px; justify-items: center; min-width: 120px; }
+.air svg { width: 104px; height: 104px; }
+.air .big { font: 600 1.45rem/1 var(--f-display); }
+.air .sm { font: 500 .72rem/1.2 var(--f-display); letter-spacing: .08em; color: var(--muted); text-align: center; }
+.bar { width: 120px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--ice); border-radius: 3px; }
+.fanrow { display: grid; gap: 4px; justify-items: start; }
+
+#cluster { position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--gb); display: grid; justify-items: center; gap: 4px; text-shadow: 0 2px 16px rgba(0,0,0,.55); }
+#cluster .spd { display: flex; align-items: baseline; gap: 8px; }
+#spd { font: 300 clamp(3.4rem, 8vw, 5.6rem)/0.85 var(--f-display); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+#unit { font: 600 .9rem/1 var(--f-display); letter-spacing: .16em; color: var(--muted); }
+.gears { display: flex; gap: 10px; font: 700 .95rem/1 var(--f-display); letter-spacing: .1em; color: var(--dim); }
+.gears span[data-on="1"] { color: var(--ink); }
+.pwr { position: relative; width: min(340px, 64vw); height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.pwr i { position: absolute; top: 0; bottom: 0; left: 22%; width: 0; background: linear-gradient(90deg, var(--ice), #e8fbff); }
+.pwr i.regen { left: auto; right: 78%; background: var(--good); }
+.pwr::after { content: ""; position: absolute; left: 22%; top: -2px; bottom: -2px; width: 1px; background: rgba(255,255,255,.5); }
+.subline { display: flex; gap: 14px; font: 600 .78rem/1 var(--f-display); letter-spacing: .08em; color: var(--muted); }
+.subline b { color: var(--ink); font-weight: 600; }
+
+#fl { position: absolute; right: var(--gxr); bottom: var(--gb); padding: 12px; display: grid; grid-template-columns: auto auto; gap: 12px; align-items: center; }
+#adi { width: 120px; height: 120px; border-radius: 50%; }
+#fl dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 6px 12px; align-items: baseline; }
+#fl dt { font: 600 .66rem/1 var(--f-display); letter-spacing: .14em; color: var(--muted); }
+#fl dd { margin: 0; font: 600 1.05rem/1 var(--f-display); text-align: right; font-variant-numeric: tabular-nums; }
+#ammo { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; font: 600 .72rem/1 var(--f-display); letter-spacing: .12em; color: var(--amber); }
+#ammo i { width: 10px; height: 18px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 8px rgba(255,181,71,.6); }
+#ammo i.used { background: rgba(255,181,71,.18); box-shadow: none; }
+
+#xh { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+#xh::before, #xh::after { content: ""; position: absolute; background: var(--amber); box-shadow: 0 0 6px rgba(0,0,0,.8); }
+#xh::before { left: 14px; top: 0; width: 2px; height: 30px; clip-path: polygon(0 0,100% 0,100% 35%,0 35%,0 65%,100% 65%,100% 100%,0 100%); }
+#xh::after { top: 14px; left: 0; height: 2px; width: 30px; clip-path: polygon(0 0,35% 0,35% 100%,0 100%,0 0,65% 0,100% 0,100% 100%,65% 100%); }
+#xh.reload { opacity: .35; }
+
+#hint { position: absolute; right: var(--gxr); top: calc(var(--gt) + 214px); font: 600 .72rem/1.6 var(--f-display); letter-spacing: .08em; color: var(--muted); text-align: right; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+
+#toasts { position: absolute; left: 50%; top: calc(124px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; pointer-events: none; width: min(520px, calc(100vw - 32px)); z-index: 5; }
+.toast { padding: 8px 14px; border-radius: 8px; background: var(--glass-strong); border: 1px solid var(--line); font: 600 .95rem/1.25 var(--f-display); letter-spacing: .04em; text-align: center; animation: tin .25s ease-out; }
+.toast.good { border-color: rgba(70,240,160,.5); }
+.toast.warn { border-color: rgba(255,181,71,.6); color: var(--amber); }
+.toast.ice { border-color: rgba(127,227,255,.5); }
+.toast.out { opacity: 0; transition: opacity .4s; }
+@keyframes tin { from { opacity: 0; transform: translateY(-6px); } }
+
+#flash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(255,210,150,.5), rgba(255,120,40,0) 60%); opacity: 0; }
+#vign { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, rgba(0,0,0,0) 55%, rgba(0,0,0,.42) 100%); }
+
+/* ---------- overlays ---------- */
+.overlay { position: absolute; inset: 0; z-index: 10; overflow-y: auto; padding: calc(20px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { background: var(--glass-strong); border: 1px solid var(--line); border-radius: 14px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+
+#start { background: linear-gradient(90deg, rgba(5,7,9,.94) 0%, rgba(5,7,9,.78) 46%, rgba(5,7,9,0) 75%); }
+#start .wrap { max-width: 640px; display: grid; gap: 18px; padding-block: 8px; }
+.eyebrow { font: 600 .74rem/1.3 var(--f-display); letter-spacing: .18em; color: var(--ice); text-transform: uppercase; }
+#start h1 { margin: 0; font: 800 clamp(3rem, 9vw, 5.6rem)/.86 var(--f-display); letter-spacing: .02em; text-transform: uppercase; text-wrap: balance; }
+#start h1 span { display: block; font-weight: 300; color: var(--muted); letter-spacing: .08em; font-size: .46em; margin-top: .2em; }
+#start h1 em { font-style: normal; color: var(--roadster); }
+.lede { margin: 0; max-width: 56ch; color: #c9d3da; font-size: 1rem; line-height: 1.45; }
+.trims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.trim { text-align: left; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.035); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.trim[aria-pressed="true"] { border-color: var(--ice); background: rgba(127,227,255,.08); box-shadow: inset 0 0 0 1px rgba(127,227,255,.35); }
+.trim .tn { font: 800 1.35rem/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.trim .tt { font: 600 .68rem/1 var(--f-display); letter-spacing: .14em; color: var(--ice); text-transform: uppercase; }
+.trim dl { margin: 0; display: grid; gap: 3px; }
+.trim dl div { display: flex; justify-content: space-between; gap: 6px; font-size: .74rem; color: var(--muted); }
+.trim dl dd { margin: 0; color: var(--ink); text-align: right; }
+.trim p { margin: 0; font-size: .78rem; line-height: 1.35; color: #b7c3cc; }
+.row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 8px 12px; font: 600 .82rem/1 var(--f-display); letter-spacing: .08em; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: rgba(127,227,255,.14); color: var(--ink); }
+.swatches { display: flex; gap: 8px; }
+.sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); padding: 0; }
+.sw[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(127,227,255,.35); }
+.cta { display: inline-flex; align-items: center; gap: 12px; padding: 14px 22px; border-radius: 10px; border: 0; background: var(--ink); color: #06090c; font: 800 1.15rem/1 var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+.cta:hover { background: #fff; }
+.cta kbd { background: rgba(0,0,0,.08); color: #06090c; border-color: rgba(0,0,0,.25); }
+.quick { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--muted); }
+.quick span { display: inline-flex; gap: 6px; align-items: center; }
+.fine { font-size: .74rem; line-height: 1.45; color: var(--dim); max-width: 64ch; margin: 0; }
+.fine a { color: var(--muted); }
+
+#menu .sheet, #help .sheet { max-width: 880px; margin: 0 auto; padding: 22px; display: grid; gap: 18px; }
+.sheet h2 { margin: 0; font: 800 1.7rem/1 var(--f-display); letter-spacing: .08em; text-transform: uppercase; }
+.sheet h3 { margin: 0 0 8px; font: 700 .8rem/1 var(--f-display); letter-spacing: .16em; text-transform: uppercase; color: var(--ice); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { padding: 9px 13px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.05); font: 600 .9rem/1 var(--f-display); letter-spacing: .06em; }
+.btn:hover { background: rgba(255,255,255,.1); }
+.btn.primary { background: var(--ink); color: #06090c; border-color: transparent; }
+.btn.primary kbd { background: rgba(0,0,0,.08); color: #06090c; border-color: rgba(0,0,0,.25); }
+.setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.setting input[type=range] { width: 140px; accent-color: var(--ice); }
+.tp { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.tp button { text-align: left; display: flex; gap: 8px; align-items: center; }
+
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px 26px; }
+.keys ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.keys li { display: grid; grid-template-columns: 112px 1fr; gap: 10px; align-items: center; font-size: .9rem; color: #cdd7de; }
+.keys li > span:first-child { display: flex; gap: 4px; flex-wrap: wrap; }
+
+#bigmap { background: rgba(4,6,8,.86); display: grid; place-items: center; }
+#bigmap .inner { display: grid; grid-template-columns: auto minmax(200px, 260px); gap: 16px; align-items: start; max-width: 100%; }
+#bigmapc { width: min(78vh, 62vw); height: min(78vh, 62vw); border-radius: 12px; border: 1px solid var(--line); cursor: crosshair; }
+#bigmap .side { display: grid; gap: 8px; }
+#bigmap .side .btn { text-align: left; display: flex; gap: 8px; align-items: center; }
+
+#loading { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg); }
+#loading .box { display: grid; gap: 12px; justify-items: center; text-align: center; padding: 0 16px; }
+#loading .t { font: 800 2.2rem/1 var(--f-display); letter-spacing: .14em; text-transform: uppercase; }
+#loading .s { font: 600 .85rem/1 var(--f-display); letter-spacing: .12em; color: var(--muted); }
+#loading .bar { width: 220px; }
+#loading.err .s { color: var(--red); max-width: 60ch; line-height: 1.4; letter-spacing: .02em; }
+
+#touch { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+#touch button { pointer-events: auto; position: absolute; width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(10,13,17,.5); font: 700 .78rem/1 var(--f-display); letter-spacing: .08em; touch-action: none; }
+#touch button.on { background: rgba(127,227,255,.35); }
+
+
+/* ---------- mod menu ---------- */
+#hk-menu { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(134px + env(safe-area-inset-top, 0px)); width: min(390px, calc(100vw - 32px)); max-height: calc(100% - 370px); min-height: 280px; display: flex; flex-direction: column; z-index: 8; background: rgba(9, 6, 18, .94); border: 1px solid rgba(177, 76, 255, .55); border-radius: 10px; box-shadow: 0 0 0 1px rgba(61, 242, 255, .12), 0 14px 40px rgba(0, 0, 0, .6), 0 0 34px rgba(177, 76, 255, .22); overflow: hidden; }
+#hk-menu.in { animation: hkIn .38s cubic-bezier(.2, .9, .3, 1.15); }
+@keyframes hkIn { from { opacity: 0; transform: translateX(-34px) scale(.97); } }
+.hk-head { position: relative; padding: 12px 14px 10px; background: linear-gradient(120deg, #2c0f4e, #120a24 58%, #052129); border-bottom: 1px solid rgba(177, 76, 255, .4); overflow: hidden; }
+.hk-head b { display: block; font: 800 italic 1.7rem/1 var(--f-display); letter-spacing: .05em; background: linear-gradient(90deg, #d58bff, #3df2ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hk-head small { display: block; margin-top: 4px; font: 600 .66rem/1.3 var(--f-display); letter-spacing: .22em; color: #a291c9; text-transform: uppercase; }
+.hk-head::after { content: ""; position: absolute; left: -40%; top: 0; bottom: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .12), transparent); animation: hkScan 3.2s linear infinite; }
+@keyframes hkScan { to { left: 130%; } }
+#hk-tabs { display: flex; gap: 3px; padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+#hk-tabs button { flex: 1 1 0; min-width: 0; padding: 6px 2px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 5px; background: rgba(255, 255, 255, .03); font: 700 .7rem/1 var(--f-display); letter-spacing: .05em; text-transform: uppercase; color: #b9a9d6; }
+#hk-tabs button[aria-pressed="true"] { background: linear-gradient(90deg, #7a2fd0, #1f8fb0); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(177, 76, 255, .5); }
+#hk-body { overflow-y: auto; padding: 4px 12px 8px; min-height: 0; }
+.hk-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 2px; border-bottom: 1px solid rgba(255, 255, 255, .06); font-size: .88rem; color: #e6defa; }
+.hk-row > span { min-width: 0; }
+.hk-row kbd { flex: none; }
+.hk-sw { width: 42px; height: 22px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .2); background: #1c1730; position: relative; flex: none; padding: 0; }
+.hk-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #6d6290; transition: transform .15s, background .15s; }
+.hk-sw[aria-pressed="true"] { background: linear-gradient(90deg, #7a2fd0, #22b8d8); border-color: transparent; box-shadow: 0 0 10px rgba(61, 242, 255, .45); }
+.hk-sw[aria-pressed="true"]::after { transform: translateX(20px); background: #fff; }
+.hk-sl { display: flex; align-items: center; gap: 8px; flex: none; }
+.hk-sl input[type=range] { width: 118px; accent-color: #b14cff; }
+.hk-sl output { min-width: 50px; text-align: right; font: 600 .8rem/1 var(--f-display); color: #3df2ff; font-variant-numeric: tabular-nums; }
+.hk-sl select { background: #151027; color: #e6defa; border: 1px solid rgba(255, 255, 255, .18); border-radius: 5px; padding: 4px 6px; font: inherit; font-size: .82rem; }
+.hk-btn { padding: 6px 10px; border-radius: 5px; border: 1px solid #ff4d8d; background: rgba(255, 77, 141, .12); color: #ff9cc0; font: 800 .74rem/1 var(--f-display); letter-spacing: .12em; }
+.hk-btn:hover { background: rgba(255, 77, 141, .28); }
+.hk-row input[type=color] { width: 42px; height: 24px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 4px; background: none; padding: 0; flex: none; }
+.hk-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid rgba(255, 255, 255, .08); font: 600 .7rem/1.3 var(--f-display); letter-spacing: .08em; color: #8d80aa; }
+.hk-foot .btn { padding: 6px 10px; font-size: .78rem; }
+#hk-code, #hk-load { position: absolute; inset: 0; z-index: 14; display: grid; place-items: center; background: rgba(4, 3, 10, .55); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.hk-box { width: min(360px, 100%); padding: 22px; border-radius: 12px; background: rgba(10, 7, 20, .96); border: 1px solid rgba(177, 76, 255, .6); box-shadow: 0 0 40px rgba(177, 76, 255, .3); display: grid; gap: 10px; text-align: center; }
+.hk-box.shake { animation: hkShake .4s; }
+@keyframes hkShake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+.hk-box .t { font: 800 1.3rem/1 var(--f-display); letter-spacing: .3em; color: #d58bff; }
+.hk-box .s { font: 600 .74rem/1 var(--f-display); letter-spacing: .2em; color: #8d80aa; text-transform: uppercase; }
+#hk-input { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(61, 242, 255, .5); background: #05040b; color: #3df2ff; font: 600 1.3rem/1 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .4em; text-align: center; outline: none; caret-color: #3df2ff; }
+#hk-input:focus { box-shadow: 0 0 0 2px rgba(61, 242, 255, .3); }
+#hk-msg { min-height: 1.1em; font: 800 .9rem/1 var(--f-display); letter-spacing: .3em; color: #ff4d8d; }
+.hk-term { width: min(520px, 100%); padding: 18px 20px; border-radius: 10px; background: rgba(5, 4, 12, .97); border: 1px solid rgba(61, 242, 255, .45); box-shadow: 0 0 40px rgba(61, 242, 255, .2); }
+#hk-lines { margin: 0 0 12px; min-height: 13.5em; font: 500 .82rem/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #7dffb0; white-space: pre-wrap; }
+.hk-term .bar { width: 100%; height: 8px; background: rgba(255, 255, 255, .08); }
+.hk-term .bar > i { background: linear-gradient(90deg, #b14cff, #3df2ff); box-shadow: 0 0 12px rgba(61, 242, 255, .6); }
+#hk-pct { margin-top: 6px; text-align: right; font: 700 .8rem/1 ui-monospace, Consolas, monospace; color: #3df2ff; }
+#hk-load.done .hk-term { animation: hkGrant .7s; border-color: #7dffb0; }
+@keyframes hkGrant { 0% { box-shadow: 0 0 0 rgba(125, 255, 176, 0); } 30% { box-shadow: 0 0 80px rgba(125, 255, 176, .7); } 100% { box-shadow: 0 0 40px rgba(61, 242, 255, .2); } }
+#hk-fps { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(244px + env(safe-area-inset-top, 0px)); text-align: right; z-index: 6; font: 600 .76rem/1 ui-monospace, Consolas, monospace; color: #7dffb0; text-shadow: 0 1px 4px #000; pointer-events: none; }
+body.photo #hud, body.photo #toasts, body.photo #hk-menu, body.photo #vign { display: none !important; }
+
+/* ---------- updater ---------- */
+#upd { z-index: 16; background: rgba(4, 6, 8, .55); }
+#upd .sheet { max-width: 460px; margin: 12vh auto 0; padding: 22px; display: grid; gap: 12px; }
+#upd ul { margin: 0; padding-left: 1.2em; color: #c9d3da; line-height: 1.5; }
+#upd .bar { width: 100%; }
+#upd-status { font-size: .86rem; color: var(--muted); min-height: 1.2em; }
+
+@media (max-width: 760px) {
+  #thr, #fl { transform: scale(.58); }
+  #thr { transform-origin: left bottom; } #fl { transform-origin: right bottom; }
+  #minimap { width: 104px; height: 104px; }
+  #compass, #hint, #zone .zt, #timers { display: none; }
+  #tl { padding: 7px 9px; gap: 5px; max-width: calc(100vw - 150px); }
+  #tl .brand b { font-size: 1rem; }
+  .chip { font-size: .6rem; padding: 3px 5px; }
+  #zone { top: calc(var(--gt) + 118px); }
+  #zone .zn { font-size: 1.25rem; }
+  #toasts { top: calc(160px + env(safe-area-inset-top, 0px)); }
+  #cluster { bottom: calc(var(--gb) + 128px); }
+  .pwr { width: 58vw; }
+  .trims { grid-template-columns: 1fr; }
+  #start { background: rgba(5,7,9,.9); }
+  #bigmap .inner { grid-template-columns: 1fr; }
+  #bigmapc { width: min(92vw, 60vh); height: min(92vw, 60vh); }
+}
+/* touch devices: corner buttons, dashboard moved to the top */
+body.touch #thr, body.touch #fl, body.touch #hint, body.touch #timers { display: none; }
+body.touch #cluster { top: calc(var(--gt) + 74px); bottom: auto; transform: translateX(-50%) scale(.82); transform-origin: top center; }
+body.touch #zone { top: calc(var(--gt) + 190px); }
+body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
+@media (max-height: 860px) and (min-width: 761px) {
+  #start .wrap { gap: 12px; }
+  #start h1 { font-size: clamp(2.4rem, 8.4vh, 5rem); }
+  .lede { font-size: .92rem; }
+  .trim { padding: 10px; gap: 6px; }
+  .trim p { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } #zone { transition: none; } }
+</style>
+
+<div id="app">
+  <canvas id="gl" tabindex="0" aria-label="3D view"></canvas>
+  <div id="vign"></div>
+  <div id="flash"></div>
+
+  <div id="hud" hidden>
+    <div id="tl" class="panel">
+      <div class="brand"><b>ROADSTER <i id="h-trim">ROCKET</i></b><span id="h-mode" data-m="drive">DRIVE</span></div>
+      <div class="chips">
+        <span class="chip" id="c-assist" data-on="1">ASSIST ON</span>
+        <span class="chip" id="c-fan" data-on="1">FAN AUTO</span>
+        <span class="chip" id="c-air" data-on="1">AIR REAL</span>
+        <span class="chip" id="c-cam">CHASE CAM</span>
+        <span class="chip" id="c-gun" data-warn="1" hidden>LAUNCHER</span>
+      </div>
+    </div>
+
+    <div id="zone"><div class="zn" id="z-name"></div><div class="zt" id="z-tip"></div></div>
+    <div id="timers" class="panel">
+      <span>0-60 <b id="t-060" class="num">--</b></span>
+      <span>BEST <b id="t-060b" class="num best">--</b></span>
+      <span>1/4 MI <b id="t-qm" class="num">--</b></span>
+      <span>TOP <b id="t-top" class="num">0</b></span>
+      <span id="t-ringw" hidden>RINGS <b id="t-ring" class="num">0/10</b> <b id="t-ringt" class="num">0.0</b></span>
+    </div>
+
+    <div id="tr">
+      <canvas id="minimap" width="352" height="352" aria-label="Minimap"></canvas>
+      <div id="compass" class="num">N 000°</div>
+    </div>
+    <div id="hint"><kbd>H</kbd> controls · <kbd>M</kbd> map · <kbd>P</kbd> menu</div>
+
+    <div id="thr" class="panel">
+      <svg class="car" viewBox="-40 -80 80 160" aria-label="Thruster diagram">
+        <path d="M0 -76 C 22 -76 34 -62 35 -40 L 37 40 C 37 64 26 76 0 76 C -26 76 -37 64 -37 40 L -35 -40 C -34 -62 -22 -76 0 -76 Z" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
+        <path d="M -20 -26 C -20 -38 20 -38 20 -26 L 22 22 C 22 34 -22 34 -22 22 Z" fill="rgba(127,227,255,.07)" stroke="rgba(255,255,255,.18)"/>
+        <g id="tdots"></g>
+        <text x="0" y="-62" text-anchor="middle" fill="#8d9aa6" font-size="8" font-family="Barlow Condensed, sans-serif" letter-spacing="1">FRONT</text>
+      </svg>
+      <div class="air">
+        <div class="label">Air tank</div>
+        <svg viewBox="0 0 104 104">
+          <circle cx="52" cy="52" r="44" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="7"/>
+          <circle id="air-ring" cx="52" cy="52" r="44" fill="none" stroke="#7fe3ff" stroke-width="7" stroke-linecap="round" transform="rotate(-90 52 52)" stroke-dasharray="276.5" stroke-dashoffset="0"/>
+          <text id="air-kg" x="52" y="52" text-anchor="middle" fill="#eef2f5" font-size="22" font-family="Barlow Condensed, sans-serif" font-weight="600">250</text>
+          <text id="air-sub" x="52" y="70" text-anchor="middle" fill="#8d9aa6" font-size="10" font-family="Barlow Condensed, sans-serif" letter-spacing="1">KG · 5500 PSI</text>
+        </svg>
+        <div class="sm" id="air-hover">hover ≈ 7.5 s</div>
+        <div class="fanrow"><div class="label">Fan downforce <b id="fan-kg" class="num" style="color:var(--ink)">0</b> kg</div><div class="bar"><i id="fan-bar"></i></div></div>
+      </div>
+    </div>
+
+    <div id="cluster">
+      <div class="spd"><span id="spd">0</span><span id="unit">MPH</span></div>
+      <div class="gears"><span id="g-P">P</span><span id="g-R">R</span><span id="g-N">N</span><span id="g-D" data-on="1">D</span></div>
+      <div class="pwr" aria-label="Power"><i id="pwr"></i><i id="regen" class="regen"></i></div>
+      <div class="subline"><span><b id="kw" class="num">0</b> kW</span><span><b id="gg" class="num">1.0</b> g</span><span>thrust <b id="kn" class="num">0</b> kN</span></div>
+    </div>
+
+    <div id="fl" class="panel">
+      <canvas id="adi" width="240" height="240" aria-label="Attitude indicator"></canvas>
+      <dl>
+        <dt>ALT</dt><dd id="f-alt">0 m</dd>
+        <dt>V/S</dt><dd id="f-vs">0.0</dd>
+        <dt>PITCH</dt><dd id="f-pitch">0°</dd>
+        <dt>ROLL</dt><dd id="f-roll">0°</dd>
+        <dt>AIR</dt><dd id="f-air">0.0 s</dd>
+      </dl>
+      <div id="ammo" hidden></div>
+    </div>
+    <div id="xh" hidden></div>
+  </div>
+
+
+  <div id="hk-fps" hidden></div>
+  <div id="hk-menu" hidden>
+    <div class="hk-head"><b>ROADSTER // MOD MENU</b><small>v__VERSION__ · access granted · press - to hide</small></div>
+    <div id="hk-tabs"></div>
+    <div id="hk-body"></div>
+    <div class="hk-foot"><span>changes apply instantly</span><span><button class="btn" id="hk-reset">Turn all off</button> <button class="btn" id="hk-close">Hide <kbd>-</kbd></button></span></div>
+  </div>
+  <div id="hk-code" hidden>
+    <div class="hk-box">
+      <div class="t">RESTRICTED</div>
+      <div class="s">Enter access code</div>
+      <input id="hk-input" type="password" autocomplete="off" spellcheck="false" maxlength="24" aria-label="Access code">
+      <div id="hk-msg" aria-live="polite"></div>
+      <div class="s">Enter to submit · Esc to cancel</div>
+    </div>
+  </div>
+  <div id="hk-load" hidden>
+    <div class="hk-term"><pre id="hk-lines"></pre><div class="bar"><i id="hk-bar"></i></div><div id="hk-pct">0%</div></div>
+  </div>
+  <div id="upd" class="overlay" hidden>
+    <div class="sheet">
+      <h2 id="upd-title">Update available</h2>
+      <div id="upd-ver" class="label"></div>
+      <ul id="upd-notes"></ul>
+      <div class="bar" id="upd-barw" hidden><i id="upd-bar"></i></div>
+      <div id="upd-status"></div>
+      <div class="btnrow"><button class="btn primary" id="upd-go">Update now</button><button class="btn" id="upd-later">Later</button></div>
+    </div>
+  </div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <div id="start" class="overlay" hidden>
+    <div class="wrap">
+      <div class="eyebrow">Unofficial test sim · based on the Oct 15, 2026 reveal</div>
+      <h1>Roadster <em>Rocket</em><span>Physics test site</span></h1>
+      <p class="lede">Ten cold-gas thrusters, 250 kg of air, a fan that holds 4,700 kg of downforce. Pick a trim and take it to the 4 km test site: drag strip, the 170° demo ramp, a full loop, a wall ride, a flight canyon and a weapons range.</p>
+      <div class="trims" id="trims"></div>
+      <div class="row">
+        <div><div class="label" style="margin-bottom:6px">Air supply</div>
+          <div class="seg" id="airmode"><button id="air-real" aria-pressed="true">Real · 250 kg</button><button id="air-sand" aria-pressed="false">Sandbox · unlimited</button></div></div>
+        <div><div class="label" style="margin-bottom:6px">Paint</div><div class="swatches" id="paints"></div></div>
+      </div>
+      <div class="row">
+        <button class="cta" id="go">Start driving <kbd>Enter</kbd></button>
+      </div>
+      <div class="quick">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</span>
+        <span><kbd>Space</kbd> fly up</span>
+        <span><kbd>Shift</kbd> boost</span>
+        <span><kbd>1</kbd>-<kbd>9</kbd> teleport</span>
+        <span><kbd>H</kbd> all controls</span>
+      </div>
+      <p class="fine">Specs come from press coverage of the reveal. Curb weight, lift-thruster force and motor power are not published, so the sim uses estimates (marked est.). Real air lasts about 7 s of hovering, matching outside analyses; choose Sandbox for unlimited flying. Fan-made and not affiliated with Tesla or SpaceX.</p>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay" hidden>
+    <div class="sheet">
+      <div class="row" style="justify-content:space-between"><h2>Paused</h2><div class="btnrow"><button class="btn primary" id="m-resume">Resume <kbd>P</kbd></button><button class="btn" id="m-garage">Change car</button></div></div>
+      <div class="grid2">
+        <div>
+          <h3>Settings</h3>
+          <div class="setting"><span>Units</span><div class="seg"><button id="u-mph" aria-pressed="true">mph</button><button id="u-kmh" aria-pressed="false">km/h</button></div></div>
+          <div class="setting"><span>Air supply</span><div class="seg"><button id="m-real" aria-pressed="true">Real</button><button id="m-sand" aria-pressed="false">Sandbox</button></div></div>
+          <div class="setting"><span>Flight assist</span><div class="seg"><button id="m-as-on" aria-pressed="true">On</button><button id="m-as-off" aria-pressed="false">Manual</button></div></div>
+          <div class="setting"><span>Graphics</span><div class="seg"><button id="q-0" aria-pressed="false">Low</button><button id="q-1" aria-pressed="false">Medium</button><button id="q-2" aria-pressed="true">High</button></div></div>
+          <div class="setting"><span>Steering sensitivity</span><input id="steer-sens" type="range" min="0.5" max="1.5" step="0.05" value="1"></div>
+          <div class="setting"><span>Volume</span><input id="vol" type="range" min="0" max="1" step="0.05" value="0.7"></div>
+          <div class="setting" id="upd-row" hidden><span>Version <b id="ver-text"></b></span><button class="btn" id="upd-check">Check for updates</button></div>
+        </div>
+        <div>
+          <h3>Teleport</h3>
+          <div class="tp" id="tp"></div>
+          <h3 style="margin-top:16px">World</h3>
+          <div class="btnrow"><button class="btn" id="m-rebuild">Rebuild destroyed targets <kbd>⌫</kbd></button><button class="btn" id="m-help">Controls <kbd>H</kbd></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="overlay" hidden>
+    <div class="sheet">
+      <div class="row" style="justify-content:space-between"><h2>Controls</h2><button class="btn primary" id="h-close">Close <kbd>H</kbd></button></div>
+      <div class="keys">
+        <div><h3>Drive</h3><ul>
+          <li><span><kbd>W</kbd><kbd>↑</kbd></span><span>Accelerate</span></li>
+          <li><span><kbd>S</kbd><kbd>↓</kbd></span><span>Brake, then reverse</span></li>
+          <li><span><kbd>A</kbd><kbd>D</kbd></span><span>Steer</span></li>
+          <li><span><kbd>Shift</kbd></span><span>Rocket boost (rear thrusters)</span></li>
+          <li><span><kbd>X</kbd></span><span>Handbrake / drift</span></li>
+          <li><span><kbd>F</kbd></span><span>Fan suction: Auto, Max, Off</span></li>
+          <li><span><kbd>R</kbd></span><span>Reset car upright</span></li>
+        </ul></div>
+        <div><h3>Fly (Rocket trim)</h3><ul>
+          <li><span><kbd>Space</kbd></span><span>Lift off / climb</span></li>
+          <li><span><kbd>C</kbd></span><span>Descend (soft landing)</span></li>
+          <li><span><kbd>W</kbd><kbd>S</kbd></span><span>Tilt forward / back</span></li>
+          <li><span><kbd>A</kbd><kbd>D</kbd></span><span>Turn</span></li>
+          <li><span><kbd>Q</kbd><kbd>E</kbd></span><span>Barrel roll left / right (hold to slide)</span></li>
+          <li><span><kbd>Shift</kbd></span><span>Boost forward</span></li>
+          <li><span><kbd>G</kbd></span><span>Flight assist on / manual</span></li>
+          <li><span>no keys</span><span>Assist hovers in place</span></li>
+        </ul></div>
+        <div><h3>Weapons</h3><ul>
+          <li><span>pickup</span><span>Drive through a launcher at the Weapons Range</span></li>
+          <li><span><kbd>Click</kbd><kbd>B</kbd></span><span>Fire rocket at the crosshair</span></li>
+          <li><span><kbd>Drag</kbd></span><span>Aim / look around</span></li>
+          <li><span><kbd>⌫</kbd></span><span>Rebuild everything you blew up</span></li>
+        </ul></div>
+        <div><h3>Camera &amp; menus</h3><ul>
+          <li><span><kbd>V</kbd></span><span>Camera: chase, far, cockpit, cinematic, orbit</span></li>
+          <li><span><kbd>Wheel</kbd></span><span>Zoom</span></li>
+          <li><span><kbd>M</kbd></span><span>Big map (click a zone to go)</span></li>
+          <li><span><kbd>1</kbd>-<kbd>9</kbd></span><span>Teleport to zones</span></li>
+          <li><span><kbd>N</kbd></span><span>Sound on / off</span></li>
+          <li><span><kbd>P</kbd><kbd>Esc</kbd></span><span>Pause menu</span></li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bigmap" class="overlay" hidden>
+    <div class="inner">
+      <canvas id="bigmapc" width="900" height="900" aria-label="Map"></canvas>
+      <div class="side"><h3 class="label" style="color:var(--ice)">Go to</h3><div id="bm-list" class="side"></div><button class="btn primary" id="bm-close">Close <kbd>M</kbd></button></div>
+    </div>
+  </div>
+
+  <div id="touch" hidden></div>
+
+  <div id="loading"><div class="box"><div class="t">Roadster</div><div class="s" id="load-s">Building test site</div><div class="bar"><i id="load-bar"></i></div></div></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+/*__BUNDLE__*/
+</script>

@@ -1,0 +1,8 @@
+{
+  "name": "roadster-rocket-sim",
+  "productName": "Roadster Rocket Sim",
+  "version": "1.1.0",
+  "description": "Unofficial Roadster physics test site",
+  "main": "main.cjs",
+  "private": true
+}

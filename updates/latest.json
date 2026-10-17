@@ -1,0 +1,11 @@
+{
+  "version": "1.1.0",
+  "file": "game-1.1.0.html",
+  "sha256": "9abc1730c9a552595d9d4bac3cbded9ef459ae12451287ef025bd4ffc30c5cd1",
+  "size": 1192266,
+  "minShell": "1.1.0",
+  "date": "2026-10-17",
+  "notes": [
+    "Mod menu, barrel rolls on Q / E, steering fix, and this updater"
+  ]
+}
