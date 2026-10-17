@@ -1,5 +1,7 @@
 // Roadster Rocket Sim: boots the renderer and world, runs the fixed-step physics loop,
 // and connects input, vehicle, destruction, weapons, effects, camera, HUD and sound.
+// v2: garage + credits, Physics 2.0 (tires, crash damage, aero, wind, slipstream, real-gas tank,
+// shockwaves) with a Classic switch, and the mod-menu extras that go with them.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -19,6 +21,13 @@ import { HUD } from './hud.js';
 import { Input } from './input.js';
 import { Sound } from './audio.js';
 import { TRIMS, PAINTS, PHYS, MPH } from './config.js';
+import { env } from './physics2.js';
+import { CarDamageVisual, LooseWheels } from './damage.js';
+import { arrivalTime } from './shockwave.js';
+import { Profile, Showroom, COSMETICS, findItem, EARN } from './garage.js';
+import { GarageUI } from './garageUI.js';
+import { Rewards } from './rewards.js';
+import { PaceCar } from './pacecar.js';
 
 const $ = (id) => document.getElementById(id);
 const DT = PHYS.DT;
@@ -36,7 +45,10 @@ async function boot(hotData = {}) {
   window.__booted = true;
   try { await Promise.race([document.fonts.load('800 40px "Barlow Condensed"'), new Promise(r => setTimeout(r, 1500))]); } catch (_) { /* fonts optional */ }
 
-  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1 }, store.get('settings', {}), hotData.settings || {});
+  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1, physics: '2' }, store.get('settings', {}), hotData.settings || {});
+  const profile = new Profile(store);
+  // older saves kept the paint in settings
+  if (!store.get('garage', null) && settings.paint) profile.d.setup.paint = settings.paint;
   const best = store.get('best', {});
   const saveSettings = () => store.set('settings', settings);
 
@@ -132,12 +144,18 @@ async function boot(hotData = {}) {
   await progress('Assembling the Roadster', 0.85);
 
   // ---------- car ----------
-  const paint = PAINTS.find(p => p.id === settings.paint) || PAINTS[0];
+  const paint = findItem('paint', profile.look().paint);
   const model = buildCar(paint);
   model.spoiler.userData.y0 = model.spoiler.position.y;
   scene.add(model.group);
   const vehicle = new Vehicle();
-  vehicle.setTrim(TRIMS[settings.trim] || TRIMS.rocket);
+  vehicle.phys2 = settings.physics !== 'classic';
+  vehicle.tune = profile.tune();
+  vehicle.setTrim(profile.effectiveTrim(TRIMS[settings.trim] || TRIMS.rocket));
+  const dmgVis = new CarDamageVisual(model);
+  const looseWheels = new LooseWheels(scene);
+  const showroom = new Showroom(renderer);
+  const paceCar = new PaceCar(scene);
   vehicle.sandbox = settings.sandbox;
   vehicle.assist = settings.assist;
   vehicle.steerSens = settings.steerSens;
@@ -150,14 +168,15 @@ async function boot(hotData = {}) {
   sound.volume = settings.volume;
 
   // ---------- post processing ----------
-  let composer = null, bloom = null;
+  let composer = null, bloom = null, renderPass = null;
   const setupPost = () => {
     const w = innerWidth, h = innerHeight;
     if (composer) { composer.dispose?.(); composer = null; }
     if (settings.quality >= 1) {
       const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: settings.quality >= 2 ? 4 : 0 });
       composer = new EffectComposer(renderer, rt);
-      composer.addPass(new RenderPass(scene, camera));
+      renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
       bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.5, 0.55, 1.0);
       composer.addPass(bloom);
       composer.addPass(new OutputPass());
@@ -197,6 +216,7 @@ async function boot(hotData = {}) {
     fps: 60, fpsT: 0, fpsN: 0, lowFpsT: 0, autoDropped: 0,
     errors: 0, hudT: 0, canvasT: 0,
     timeScale: 1, rollTap: 0, physMs: 0,
+    repair: 0, shakes: [], crashCam: null, garageFrom: null,
   };
   const loadBest = () => { const b = best[vehicle.trim.id] || {}; G.timers.best060 = b.z60 || 0; };
   loadBest();
@@ -204,8 +224,7 @@ async function boot(hotData = {}) {
   const spawnAt = (tp) => {
     const y = heightAt(tp.x, tp.z);
     vehicle.reset(new THREE.Vector3(tp.x, y + 0.6 + (vehicle.hack.scale - 1) * 0.6, tp.z), tp.yaw);
-    vehicle.air = vehicle.trim.airMax;
-    vehicle.updateMass();
+    vehicle.fillTank();
     effects.skids.clear();
     rig.snap();
     G.timers.state = 'idle';
@@ -237,8 +256,16 @@ async function boot(hotData = {}) {
     const dist = camera.position.distanceTo(pos);
     _tmp.copy(pos).sub(camera.position).normalize();
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    sound.explosion(dist, Math.max(-1, Math.min(1, _tmp.dot(right))));
-    rig.trauma = Math.min(1, rig.trauma + Math.max(0, 1 - dist / 140) * 0.85);
+    const shake = Math.max(0, 1 - dist / 140) * 0.85;
+    if (vehicle.phys2) {
+      // the boom and the shake arrive with the shockwave; the flash is instant
+      const at = arrivalTime(radius, dist);
+      sound.explosion(dist, Math.max(-1, Math.min(1, _tmp.dot(right))), Math.min(3, at));
+      if (shake > 0) G.shakes.push({ t: at, amt: shake });
+    } else {
+      sound.explosion(dist, Math.max(-1, Math.min(1, _tmp.dot(right))));
+      rig.trauma = Math.min(1, rig.trauma + shake);
+    }
     if (dist < 35) G.flash = Math.max(G.flash || 0, 0.5 * (1 - dist / 35));
     // blast pushes the car (rocket jumps!)
     const cd = vehicle.pos.distanceTo(pos);
@@ -246,8 +273,16 @@ async function boot(hotData = {}) {
       const f = 1 - cd / (radius * 1.4);
       const dir = vehicle.pos.clone().sub(pos); dir.y = Math.max(dir.y, 0.4); dir.normalize();
       vehicle.applyImpulse(dir.multiplyScalar(f * power * 16000), vehicle.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 0.6)));
+      vehicle.blastHit(pos, f * power * 0.55);
     }
   };
+  // the shockwave reaching the car beyond the direct blast zone gives it a shove
+  destruction.shock.vehicle = vehicle;
+  destruction.shock.onCar = (f, dist, s) => {
+    const dir = vehicle.pos.clone().sub(f.pos); dir.y = Math.max(dir.y, 0.15); dir.normalize();
+    vehicle.applyImpulse(dir.multiplyScalar(Math.min(14000, s * 9000)), vehicle.pos.clone().add(new THREE.Vector3(0, 0.3, 0)));
+  };
+  destruction.glass.onShatter = (p, n) => sound.glass(camera.position.distanceTo(p), n);
   destruction.onImpact = (pos, speed) => { if (camera.position.distanceTo(pos) < 60) sound.impact(Math.min(8, speed * 0.6)); };
   weapons.onFire = () => { sound.launch(); rig.fovKick -= 1.5; };
   weapons.onPickup = () => {
@@ -259,8 +294,9 @@ async function boot(hotData = {}) {
   // ---------- UI wiring ----------
   const show = (id, on) => { $(id).hidden = !on; };
   const setOverlay = (name) => {
+    if (G.overlay === 'garage' && name !== 'garage') closeGarage();
     G.overlay = name;
-    show('menu', name === 'menu'); show('help', name === 'help'); show('bigmap', name === 'map');
+    show('menu', name === 'menu'); show('help', name === 'help'); show('bigmap', name === 'map'); show('garage', name === 'garage');
     G.paused = !!name && G.state === 'play';
     if (name === 'map') hud.drawBigMap($('bigmapc'), mapImg, vehicle, mapZones(), { markers: markers() });
     if (name === 'menu') { $('m-resume').focus(); }
@@ -282,15 +318,24 @@ async function boot(hotData = {}) {
     b.className = 'trim'; b.id = 'trim-' + t.id;
     b.setAttribute('aria-pressed', String(t.id === settings.trim));
     b.innerHTML = `<span class="tt">${t.tag}</span><span class="tn">${t.name}</span><dl>${t.specs.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl><p>${t.blurb}</p>`;
-    b.addEventListener('click', () => {
-      settings.trim = t.id; saveSettings();
-      trimsEl.querySelectorAll('.trim').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-      applyTrim();
-    });
+    b.addEventListener('click', () => setTrimId(t.id));
     trimsEl.appendChild(b);
   }
+  // a different trim is a different (fresh) car; same trim keeps its damage
+  const setTrimId = (id) => {
+    const changed = settings.trim !== id;
+    settings.trim = id; saveSettings();
+    trimsEl.querySelectorAll('.trim').forEach(x => x.setAttribute('aria-pressed', String(x.id === 'trim-' + id)));
+    applyTrim();
+    if (changed) vehicle.repairAll();
+  };
+  // garage upgrades -> physics (stock levels give exactly the stock car)
   const applyTrim = () => {
-    vehicle.setTrim(TRIMS[settings.trim]);
+    const sameTrim = vehicle.trim && vehicle.trim.id === settings.trim;
+    const health = vehicle.thrusters.map(t => t.health);
+    vehicle.tune = profile.tune();
+    vehicle.setTrim(profile.effectiveTrim(TRIMS[settings.trim]));
+    if (sameTrim && health.length === vehicle.thrusters.length) vehicle.thrusters.forEach((t, i) => { t.health = health[i]; });
     vehicle.sandbox = settings.sandbox;
     hud.buildThrusterDots(vehicle);
     $('h-trim').textContent = vehicle.trim.name.toUpperCase();
@@ -302,17 +347,45 @@ async function boot(hotData = {}) {
     loadBest();
   };
   const paintsEl = $('paints');
+  const syncPaints = () => { const cur = profile.look().paint; paintsEl.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-pressed', String(x.id === 'paint-' + cur))); };
   for (const p of PAINTS) {
     const b = document.createElement('button');
     b.className = 'sw'; b.id = 'paint-' + p.id; b.title = p.name; b.setAttribute('aria-label', p.name);
     b.style.background = p.color;
-    b.setAttribute('aria-pressed', String(p.id === settings.paint));
-    b.addEventListener('click', () => { settings.paint = p.id; saveSettings(); model.setPaint(p); paintsEl.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+    b.addEventListener('click', () => { settings.paint = p.id; saveSettings(); profile.setPart('paint', p.id); applyLook(); syncPaints(); });
     paintsEl.appendChild(b);
   }
+  syncPaints();
+  // looks: garage cosmetics, with mod-menu visual overrides on top; preview = parts being tried on
+  let hacks = null;
+  const vaporOf = (hex) => hex === '#eef7ff' ? [0.93, 0.97, 1.0] : (c => [c.r, c.g, c.b])(new THREE.Color(hex));
+  const applyLook = (preview = {}) => {
+    const L = Object.assign(profile.look(), preview);
+    const hv = hacks && hacks.unlocked ? hacks.v : null;
+    if (hv && hv.paint) model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); else model.setPaint(findItem('paint', L.paint));
+    model.setLook({ wheels: L.wheels, wing: L.wing });
+    const glow = findItem('glow', L.glow), hackGlow = hv && hv.underglow;
+    model.underglow.visible = !!(hackGlow || glow.color);
+    model.underglow.material.color.set(hackGlow ? hv.glowColor : (glow.color || '#b14cff'));
+    effects.vapor = vaporOf(hv && hv.smoke && hv.smoke !== '#eef7ff' ? hv.smoke : findItem('smoke', L.smoke).color);
+  };
+  const setPhysics = (mode) => {
+    settings.physics = mode; saveSettings();
+    const on = mode !== 'classic';
+    vehicle.phys2 = on;
+    destruction.shock.enabled = on; if (!on) destruction.shock.clear();
+    effects.shockFronts = on;
+    env.wind.scale = on ? 1 : 0;
+    effects.smoke.wind = effects.fire.wind = on ? effectsWind : null;
+    if (!on) { vehicle.repairAll(); vehicle.tankT = 301.15; }
+    $('ph-2').setAttribute('aria-pressed', String(on)); $('ph-c').setAttribute('aria-pressed', String(!on));
+  };
+  const effectsWind = { x: 0, z: 0 };
+  $('ph-2').onclick = () => { setPhysics('2'); hud.toast('Physics 2.0: tire heat, crash damage, aero, wind, real air tank, shockwaves', 'ice', 3200); };
+  $('ph-c').onclick = () => { setPhysics('classic'); hud.toast('Classic physics: exactly like version 1', '', 2600); };
   const setSandbox = (on) => {
     settings.sandbox = on; vehicle.sandbox = on; saveSettings();
-    if (on) vehicle.air = vehicle.trim.airMax;
+    if (on) vehicle.fillTank();
     for (const [id, v] of [['air-real', !on], ['air-sand', on], ['m-real', !on], ['m-sand', on]]) $(id).setAttribute('aria-pressed', String(v));
   };
   $('air-real').onclick = () => setSandbox(false);
@@ -358,11 +431,14 @@ async function boot(hotData = {}) {
   const startGame = () => {
     sound.init();
     sound.setVolume(settings.volume);
+    if (G.overlay === 'garage') setOverlay(null);
     G.state = 'play';
     show('start', false); show('hud', true);
     if (rig.mode === 4) rig.mode = 0;
     rig.snap();
     spawnAt(teleports[0]);
+    // a new drive starts with a fresh car
+    vehicle.repairAll(); looseWheels.clear(); paceCar.despawn();
     hud.showZone(ZONES.hq); G.zone = ZONES.hq;
     hud.toast(`${vehicle.trim.name} trim · ${settings.sandbox ? 'Sandbox air' : 'Real air'} · press H for controls`, 'ice', 4000);
     canvas.focus();
@@ -374,6 +450,44 @@ async function boot(hotData = {}) {
     spawnAt(teleports[0]);
   };
   $('go').onclick = startGame;
+
+  // ---------- garage ----------
+  const garageUI = new GarageUI(profile, {
+    apply: (preview) => { applyTrim(); applyLook(preview || {}); },
+    setTrim: (id) => setTrimId(id),
+    trimId: () => settings.trim,
+    phys2: () => vehicle.phys2,
+    close: () => setOverlay(null),
+    toast: (m, k, ms) => hud.toast(m, k, ms),
+    sound,
+    condition: () => {
+      if (!vehicle.phys2) return { text: 'Classic physics: no damage or tire wear.', bad: false };
+      const c = vehicle.damage.condition(vehicle), wear = Math.max(...vehicle.wheels.map(w => w.wear));
+      if (c > 0.995 && wear < 0.05) return { text: 'Car in perfect condition.', bad: false };
+      return { text: `Car condition ${Math.round(c * 100)}% · tires ${Math.round((1 - wear) * 100)}% tread. Repairs happen on the HQ pad (teleport 1, park on the glowing pad).`, bad: true };
+    },
+  });
+  const openGarage = () => {
+    sound.init();
+    G.garageFrom = G.state;
+    if (G.state === 'start') show('start', false);
+    setOverlay('garage');
+    showroom.open(model);
+    garageUI.open();
+    $('g-done').focus();
+  };
+  const closeGarage = () => {
+    garageUI.close();
+    showroom.close(scene);
+    applyTrim(); applyLook();
+    if (G.garageFrom === 'start') { show('start', true); updateStartCredits(); }
+    if (renderPass) { renderPass.scene = scene; renderPass.camera = camera; }
+  };
+  const updateStartCredits = () => { $('start-cr').textContent = profile.cheats.unlimited ? 'unlimited credits' : `${Math.round(profile.credits).toLocaleString('en-US')} credits`; };
+  profile.onChange = () => { updateStartCredits(); hud.credits(profile.credits, profile.cheats.unlimited); };
+  updateStartCredits();
+  $('go-garage').onclick = openGarage;
+  $('m-shop').onclick = openGarage;
 
   const spawnedRamps = [];
   const rebuild = () => {
@@ -393,9 +507,11 @@ async function boot(hotData = {}) {
   // ---------- key handling ----------
   const handleKeys = () => {
     for (const code of input.take()) {
+      if (G.overlay === 'garage') { if (code === 'Escape' || code === 'KeyG') setOverlay(null); continue; }
       if (G.state === 'start') {
         if (code === 'Enter' || code === 'NumpadEnter') startGame();
         if (code === 'KeyH') setOverlay(G.overlay === 'help' ? null : 'help');
+        if (code === 'KeyG' && !G.overlay) openGarage();
         continue;
       }
       if (code === 'Escape' || code === 'KeyP') { setOverlay(G.overlay ? null : 'menu'); continue; }
@@ -419,6 +535,82 @@ async function boot(hotData = {}) {
         if (!G.noFlyToast || G.time - G.noFlyToast > 6) { G.noFlyToast = G.time; hud.toast(`${vehicle.trim.name} trim has no lift thrusters. Pick Rocket in the menu (P) to fly.`, 'warn', 3200); }
       }
     }
+  };
+
+  // ---------- credits, crash damage, repair ----------
+  const rewards = new Rewards(profile, (text, cr) => { hud.toast(`${text} · +${cr} CR`, 'good', 2600); sound.ring(); });
+  const needsRepair = () => vehicle.damage.isDamaged(vehicle) || vehicle.wheels.some(w => w.wear > 0.02) || vehicle.thrusters.some(t => t.health < 1);
+  const _ev = new THREE.Vector3(), _ev2 = new THREE.Vector3();
+  const toWorld = (lp, out) => out.copy(lp).applyQuaternion(vehicle.quat).add(vehicle.pos);
+  const paintColor = () => new THREE.Color().copy(model.mats.paint.color);
+  const startCrashCam = () => {
+    if (G.crashCam || freeCam.on || !(hacks && hacks.unlocked && hacks.v.crashCam) || G.state !== 'play') return;
+    const off = camera.position.clone().sub(vehicle.pos);
+    G.crashCam = { t: 0, prev: G.timeScale, yaw: Math.atan2(off.x, off.z) };
+    G.timeScale = Math.min(G.timeScale, 0.2);
+    show('cine', true);
+  };
+  const updateCrashCam = (dt) => {
+    const C = G.crashCam;
+    C.t += dt;
+    const a = C.yaw + C.t * 0.55, r = 7 - C.t * 0.6;
+    const p = vehicle.pos;
+    camera.position.set(p.x + Math.sin(a) * r, Math.max(heightAt(p.x, p.z) + 0.6, p.y + 1.1 + C.t * 0.25), p.z + Math.cos(a) * r);
+    camera.up.set(0, 1, 0); camera.lookAt(p.x, p.y + 0.3, p.z);
+    camera.fov = 48; camera.updateProjectionMatrix();
+    if (C.t > 3) { G.timeScale = C.prev; G.crashCam = null; show('cine', false); rig.snap(); }
+  };
+  let crashToastT = -10;
+  const handleCarEvents = () => {
+    const sc = vehicle.hack.scale || 1;
+    for (const e of vehicle.events) {
+      if (e.type === 'dent') {
+        dmgVis.dent(_ev.copy(e.p).divideScalar(sc), e.n, e.sev);
+        sound.crunch(e.sev);
+        toWorld(e.p, _ev2);
+        effects.sparks(_ev2.x, _ev2.y, _ev2.z, vehicle.vel.x, vehicle.vel.y, vehicle.vel.z, Math.round(6 + e.sev * 20));
+        // chips of paint and carbon fly off a hard hit
+        if (e.sev > 0.5) for (let i = 0; i < Math.min(3, e.sev * 3); i++) {
+          const b = destruction.spawnFragment(_ev2.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.2, (Math.random() - 0.5) * 0.4)), vehicle.quat, new THREE.Vector3(0.12 + Math.random() * 0.12, 0.015, 0.1 + Math.random() * 0.1), 4, i ? paintColor() : new THREE.Color('#15171a'));
+          if (b) { b.vel.copy(vehicle.vel).multiplyScalar(0.6).add(new THREE.Vector3((Math.random() - 0.5) * 6, 3 + Math.random() * 3, (Math.random() - 0.5) * 6)); b.angVel.set(Math.random() * 10, Math.random() * 10, Math.random() * 10); }
+        }
+        const z = vehicle.damage.zones;
+        model.setGlassCracked(Math.min(1, Math.max(0, (Math.max(z.top, z.front * 0.8) - 0.35) * 2)));
+      } else if (e.type === 'crash') {
+        if (e.sev > 0.35) startCrashCam();
+        if (e.sev > 0.5 && G.time - crashToastT > 6) { crashToastT = G.time; hud.toast(`Big crash · car ${Math.round(vehicle.damage.condition(vehicle) * 100)}% · repair on the HQ pad (press 1)`, 'warn', 3200); }
+      } else if (e.type === 'wheelOff') {
+        const o = model.wheels[e.i];
+        o.pivot.visible = false;
+        const w = vehicle.wheels[e.i];
+        const obj = o.holder.clone(true);
+        obj.scale.multiplyScalar(sc);
+        o.pivot.updateWorldMatrix(true, false);
+        const pos = new THREE.Vector3().setFromMatrixPosition(o.pivot.matrixWorld);
+        const out = new THREE.Vector3(w.side, 0, 0).applyQuaternion(vehicle.quat);
+        looseWheels.spawn(obj, pos, vehicle.vel.clone().addScaledVector(out, 3 + Math.random() * 3).add(new THREE.Vector3(0, 2.5, 0)), out);
+        sound.crunch(1);
+        startCrashCam();
+        if (G.state === 'play') hud.toast('A wheel broke off! Repair on the HQ pad (press 1, then park on the pad)', 'warn', 4200);
+      } else if (e.type === 'part') {
+        model.broken[e.id] = true; model.refreshParts();
+        if (e.id === 'mirrorL' || e.id === 'mirrorR' || e.id === 'spoiler') {
+          const src = e.id === 'spoiler' ? model.wings[model.look.wing] : model.mirrors[e.id === 'mirrorL' ? 0 : 1];
+          const p = new THREE.Vector3(); src.updateWorldMatrix(true, true);
+          new THREE.Box3().setFromObject(src).getCenter(p);
+          const half = e.id === 'spoiler' ? new THREE.Vector3(0.6, 0.02, 0.14) : new THREE.Vector3(0.08, 0.04, 0.05);
+          const b = destruction.spawnFragment(p, vehicle.quat, half, e.id === 'spoiler' ? 8 : 2, e.id === 'spoiler' && model.look.wing !== 'duck' ? new THREE.Color('#16181b') : paintColor());
+          if (b) { b.vel.copy(vehicle.vel).multiplyScalar(0.7).add(new THREE.Vector3(0, 3, 0)); b.angVel.set(6, 4, 8); }
+        }
+      } else if (e.type === 'repaired') {
+        dmgVis.resetShape();
+        model.broken = {}; model.refreshParts(); model.setGlassCracked(0);
+        for (const o of model.wheels) o.pivot.visible = true;
+        looseWheels.clear();
+        G.repair = 0;
+      }
+    }
+    vehicle.events.length = 0;
   };
 
   // ---------- simulation step ----------
@@ -446,13 +638,19 @@ async function boot(hotData = {}) {
         tm.got60 = true; tm.last060 = tm.t;
         const isBest = !tm.best060 || tm.t < tm.best060;
         if (isBest) { tm.best060 = tm.t; best[vehicle.trim.id] = Object.assign(best[vehicle.trim.id] || {}, { z60: tm.t }); store.set('best', best); }
-        G.pendingToast = [`0-60 mph in ${tm.t.toFixed(2)} s${isBest ? ' · new best' : ''}`, isBest ? 'good' : ''];
+        const cr = G.state === 'play' ? profile.earn(EARN.z60 + (isBest ? EARN.z60best : 0)) : 0;
+        G.pendingToast = [`0-60 mph in ${tm.t.toFixed(2)} s${isBest ? ' · new best' : ''}${cr ? ` · +${cr} CR` : ''}`, isBest ? 'good' : ''];
       }
-      if (tm.dist >= 402.336) { tm.lastQM = tm.t; G.pendingToast = [`1/4 mile ${tm.t.toFixed(2)} s @ ${Math.round(sp * MPH)} mph`, 'good']; tm.state = 'idle'; }
+      if (tm.dist >= 402.336) {
+        tm.lastQM = tm.t;
+        const cr = G.state === 'play' ? profile.earn(EARN.qm) : 0;
+        G.pendingToast = [`1/4 mile ${tm.t.toFixed(2)} s @ ${Math.round(sp * MPH)} mph${cr ? ` · +${cr} CR` : ''}`, 'good']; tm.state = 'idle';
+      }
       if (tm.t > 40 || (tm.t > 0.5 && sp < 0.3)) tm.state = 'idle';
     }
     tm.running = tm.state === 'running' && !tm.got60;
     if (vehicle.contacts > 0) tm.top = Math.max(tm.top, sp);
+    if (G.state === 'play') rewards.step(vehicle, DT);
   };
 
   // ---------- per-frame gameplay ----------
@@ -463,7 +661,7 @@ async function boot(hotData = {}) {
       if (e.type === 'impact') { rig.trauma = Math.min(1, rig.trauma + Math.min(0.6, e.speed / 30)); sound.impact(e.speed); }
       if (e.type === 'barrelroll') sound.whoosh();
     }
-    vehicle.events.length = 0;
+    handleCarEvents();
     // jumps / flights
     const J = G.jump;
     if (vehicle.contacts === 0) {
@@ -472,20 +670,34 @@ async function boot(hotData = {}) {
     } else if (J.active && vehicle.contacts >= 2) {
       J.active = false;
       const dist = Math.hypot(vehicle.pos.x - J.start.x, vehicle.pos.z - J.start.z);
-      if (J.flight && J.t > 2) hud.toast(`Flight ${J.t.toFixed(1)} s · ${Math.round(dist)} m · max alt ${Math.round(J.maxAlt)} m`, 'ice');
-      else if (!J.flight && J.t > 0.7 && dist > 8) hud.toast(`Jump ${Math.round(dist)} m · ${J.t.toFixed(1)} s air · ${J.maxAlt.toFixed(1)} m high`, 'good');
+      const fl = rewards.land(vehicle);
+      if (J.flight && J.t > 2) { const cr = profile.earn(fl.credits); hud.toast(`Flight ${J.t.toFixed(1)} s · ${Math.round(dist)} m · max alt ${Math.round(J.maxAlt)} m${fl.text}${cr ? ` · +${cr} CR` : ''}`, 'ice'); }
+      else if (!J.flight && J.t > 0.7 && dist > 8) {
+        const cr = profile.earn(Math.min(dist, 250) * EARN.jumpPerM + Math.min(J.t, 8) * EARN.jumpPerS + fl.credits);
+        hud.toast(`Jump ${Math.round(dist)} m · ${J.t.toFixed(1)} s air · ${J.maxAlt.toFixed(1)} m high${fl.text} · +${cr} CR`, 'good');
+      } else if (fl.text) { const cr = profile.earn(fl.credits); hud.toast(fl.text.slice(3) + (cr ? ` · +${cr} CR` : ''), cr ? 'good' : 'warn'); }
     }
     // refuel pads
     G.refilling = false;
+    let repairing = false;
     for (const p of world.refuelPads) {
-      if (Math.hypot(vehicle.pos.x - p.x, vehicle.pos.z - p.z) < p.r && Math.abs(vehicle.pos.y - p.y) < 3 && vehicle.vel.length() < 4 && vehicle.contacts >= 2) {
+      if (Math.hypot(vehicle.pos.x - p.x, vehicle.pos.z - p.z) < p.r && Math.abs(vehicle.pos.y - p.y) < 3 && vehicle.vel.length() < 4 && (vehicle.contacts >= 2 || (vehicle.contacts >= 1 && vehicle.wheels.some(w => w.broken)))) {
         if (vehicle.trim.airMax && vehicle.air < vehicle.trim.airMax - 0.01 && !settings.sandbox) {
-          vehicle.air = Math.min(vehicle.trim.airMax, vehicle.air + 70 * dt);
-          vehicle.updateMass();
+          vehicle.addAir(70 * dt);
           G.refilling = true; G.fullToast = true;
         } else if (G.fullToast) { G.fullToast = false; hud.toast('Air tank full', 'ice', 1500); }
+        // the HQ pad also repairs the car and fits new tires (about 3 s)
+        if (p.name === 'HQ' && vehicle.phys2 && needsRepair()) {
+          repairing = true;
+          if (!G.repair) hud.toast('Repairing on the HQ pad…', 'ice', 1800);
+          G.repair += dt / 3;
+          dmgVis.restore(Math.min(1, dt * 1.6));
+          if (G.repair >= 1) { G.repair = 0; vehicle.repairAll(); vehicle.fillTank(); sound.record(); hud.toast('Car repaired · new tires fitted', 'good', 2400); }
+        }
       }
     }
+    if (repairing) { hud.el.cond.hidden = false; hud.lastText.cond = ''; hud.el.cond.textContent = `REPAIRING ${Math.round(G.repair * 100)}%`; }
+    rewards.destruction(destruction, dt);
     if (!settings.sandbox && vehicle.trim.airMax && vehicle.air <= 0.5) {
       if (!G.warnedEmpty) { G.warnedEmpty = true; sound.warn(); hud.toast('Out of air. Refill on an AIR pad, or switch to Sandbox in the menu (P).', 'warn', 4500); }
     } else if (vehicle.air > vehicle.trim.airMax * 0.3) G.warnedEmpty = false;
@@ -507,9 +719,10 @@ async function boot(hotData = {}) {
             const bk = best[vehicle.trim.id] || {};
             const isBest = !bk.rings || R.time < bk.rings;
             if (isBest) { best[vehicle.trim.id] = Object.assign(bk, { rings: R.time }); store.set('best', best); sound.record(); }
-            hud.toast(`Ring course done in ${R.time.toFixed(1)} s${isBest ? ' · new best' : ''}`, 'good', 4000);
+            const cr = profile.earn(EARN.ring + EARN.course + (isBest ? EARN.courseBest : 0));
+            hud.toast(`Ring course done in ${R.time.toFixed(1)} s${isBest ? ' · new best' : ''} · +${cr} CR`, 'good', 4000);
             R.next = 0;
-          } else hud.toast(`Ring ${R.next}/${R.total}`, 'ice', 900);
+          } else { const cr = profile.earn(EARN.ring); hud.toast(`Ring ${R.next}/${R.total} · +${cr} CR`, 'ice', 900); }
         }
       }
     }
@@ -584,11 +797,13 @@ async function boot(hotData = {}) {
       const side = _v2.copy(vehicle.left);
       const sand = w.surface === 'sand';
       const spd = vehicle.vel.length();
-      if (w.sliding > 0.25) {
+      // Physics 2.0: hot tires smoke more and thicker, even when only sliding a little
+      const hot = vehicle.phys2 && !sand ? Math.max(0, Math.min(1, (w.temp - 110) / 80)) : 0;
+      if (w.sliding > 0.25 || (hot > 0.3 && w.sliding > 0.1)) {
         if (!sand) effects.skids.add(i, P, w.normal, side, Math.min(0.75, w.sliding * 0.8), [0.04, 0.04, 0.045]);
-        if (Math.random() < w.sliding * dt * 60) {
+        if (Math.random() < w.sliding * dt * 60 * (1 + hot * 2)) {
           const c = sand ? [0.7, 0.58, 0.42] : [0.86, 0.86, 0.88];
-          effects.smoke.spawn(P.x, P.y + 0.25, P.z, (Math.random() - 0.5) * 2 + vehicle.vel.x * 0.2, 0.8 + Math.random(), (Math.random() - 0.5) * 2 + vehicle.vel.z * 0.2, 1.4 + Math.random() * 1.6, 0.6, 3.2, c[0], c[1], c[2], 0.5, { drag: 1.6, grav: -0.3 });
+          effects.smoke.spawn(P.x, P.y + 0.25, P.z, (Math.random() - 0.5) * 2 + vehicle.vel.x * 0.2, 0.8 + Math.random(), (Math.random() - 0.5) * 2 + vehicle.vel.z * 0.2, 1.4 + Math.random() * 1.6 + hot * 2, 0.6, 3.2 + hot * 3, c[0], c[1], c[2], 0.5 + hot * 0.2, { drag: 1.6, grav: -0.3 });
         }
       } else if (sand && spd > 2) {
         effects.skids.add(i, P, w.normal, side, 0.18, [0.42, 0.33, 0.22]);
@@ -597,14 +812,47 @@ async function boot(hotData = {}) {
         effects.smoke.spawn(P.x, P.y + 0.2, P.z, -vehicle.vel.x * 0.15 + (Math.random() - 0.5) * 2, 1 + Math.random() * 2, -vehicle.vel.z * 0.15 + (Math.random() - 0.5) * 2, 1.4 + Math.random(), 0.7, 3.5, 0.74, 0.62, 0.46, 0.4, { drag: 1.5 });
       }
     }
+    if (!vehicle.phys2) return;
+    // metal scraping the ground (a broken-off wheel, sliding on the roof) throws sparks
+    for (const sc of vehicle.scrapes) effects.sparks(sc.x, sc.y, sc.z, sc.vx, sc.vy, sc.vz, Math.min(4, 1 + dt * 120));
+    // a cracked tank hisses out a jet of cold vapor under the tail
+    if (vehicle.leakRate > 0.01 && vehicle.air > 0.5 && !settings.sandbox) {
+      _v.set(0.25, -0.3, -1.6).applyQuaternion(q).add(vehicle.pos);
+      _v2.set(0.4, -1, -0.6).applyQuaternion(q);
+      for (let i = 0; i < Math.min(6, vehicle.leakRate * dt * 60); i++) {
+        effects.smoke.spawn(_v.x, _v.y, _v.z, vehicle.vel.x + _v2.x * 9 + (Math.random() - 0.5) * 2, vehicle.vel.y + _v2.y * 9, vehicle.vel.z + _v2.z * 9 + (Math.random() - 0.5) * 2, 0.6 + Math.random() * 0.4, 0.15, 1.2, 0.95, 0.97, 1, 0.35, { drag: 3 });
+      }
+    }
+  };
+  // blowing dust in gusts (Physics 2.0)
+  const envFX = (dt) => {
+    if (!vehicle.phys2 || dt <= 0) return;
+    const cx = camera.position.x, cz = camera.position.z;
+    const g = env.wind.gustiness(cx, cz);
+    if (g < 0.25) return;
+    const n = Math.min(4, g * dt * 40);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 50;
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      effects.smoke.spawn(x, heightAt(x, z) + 0.3 + Math.random(), z, effectsWind.x, 0.3, effectsWind.z, 2 + Math.random() * 2, 1.5, 5, 0.72, 0.6, 0.45, 0.22 * g, { drag: 0.5 });
+    }
   };
 
+  const _tireWorn = new THREE.Color('#3a3b3e');
   const updateCarModel = (dt) => {
     model.group.position.copy(vehicle.pos);
     model.group.quaternion.copy(vehicle.quat);
     for (let i = 0; i < 4; i++) {
       const w = vehicle.wheels[i], o = model.wheels[i];
-      const target = w.mount.y - PHYS.REST + (w.contact ? w.comp : 0);
+      // worn tires look smooth and grey, overheated ones glow faintly
+      const wk = Math.round(w.wear * 20) + Math.round(Math.max(0, w.temp - 150) / 10) * 100;
+      if (o.tk !== wk) {
+        o.tk = wk;
+        o.tireMat.color.set('#141516').lerp(_tireWorn, w.wear * 0.8);
+        o.tireMat.roughness = 0.86 - w.wear * 0.4;
+        o.tireMat.emissive.setRGB(Math.min(0.25, Math.max(0, w.temp - 150) / 400), 0.02 * Math.min(1, Math.max(0, w.temp - 150) / 100), 0);
+      }
+      const target = w.mount.y - PHYS.REST + (w.contact ? w.comp : 0) - (w.flat ? 0.07 * w.flat : 0);
       o.pivot.position.y += (target - o.pivot.position.y) * Math.min(1, dt * 30);
       o.pivot.rotation.y = w.steer;
       o.spin.rotation.x += w.spinVel * dt;
@@ -627,7 +875,10 @@ async function boot(hotData = {}) {
       }
     }
     model.mats.nozzleGlow.emissiveIntensity = maxU * 4;
-    model.mats.tail.emissiveIntensity = vehicle.braking ? 7 : 2.2;
+    model.mats.tail.emissiveIntensity = model.broken.tail ? 0 : (vehicle.braking ? 7 : 2.2);
+    // a bent frame leaves the body sitting crooked
+    const bend = vehicle.damage.frame * 0.05 * vehicle.damage.frameSide;
+    model.body.rotation.z = model.canopy.rotation.z = bend;
     const sp = vehicle.vel.dot(vehicle.fwd);
     const up = sp > 30 || (vehicle.braking && sp > 15);
     model.spoiler.rotation.x += ((up ? -0.3 : 0) - model.spoiler.rotation.x) * Math.min(1, dt * 5);
@@ -651,8 +902,7 @@ async function boot(hotData = {}) {
     fog.color.setRGB(...t.fog);
     envGround.color.setRGB(0.38 * t.sunI / 3.9 + 0.02, 0.3 * t.sunI / 3.9 + 0.02, 0.22 * t.sunI / 3.9 + 0.03);
     renderer.toneMappingExposure = t.exp;
-    for (const L of model.headlights) L.intensity = t.lights * 320;
-    model.mats.head.emissiveIntensity = t.lights ? 6 : 3.2;
+    model.lights = t.lights; model.updateLights();
     rebuildEnv();
   };
 
@@ -727,6 +977,10 @@ async function boot(hotData = {}) {
       scene.add(obj);
       if (kind === 'car') destruction.spawnTarget(obj, new THREE.Vector3(0.95, 0.72, 2.45), 1800, 0.72);
       else destruction.spawnTarget(obj, new THREE.Vector3(1.35, 2.0, 8.5), 9000, 2.0);
+    } else if (kind === 'pace') {
+      paceCar.spawn(vehicle, hacks.v.paceSpeed || 120);
+      hud.toast(`Pace car at ${hacks.v.paceSpeed || 120} mph · tuck in behind it to draft`, 'ice', 2600);
+      return;
     } else if (kind === 'ramp') {
       const w = world.wedge(p.x, p.z, yaw, 6, 20, 4.5, { noStripes: true });
       spawnedRamps.push(w);
@@ -736,11 +990,13 @@ async function boot(hotData = {}) {
     }
     hud.toast('Spawned ' + kind, '', 1000);
   };
-  const restorePaint = (custom) => model.setPaint(custom ? { color: custom, metal: 0.5, rough: 0.3 } : (PAINTS.find(p => p.id === settings.paint) || PAINTS[0]));
-  const hacks = new Hacks({
+  const instantRepair = () => { vehicle.repairAll(); hud.toast('Instant repair', 'ice', 1200); };
+  const onCheats = () => { applyTrim(); applyLook(); profile.onChange(); if (G.overlay === 'garage') garageUI.render(); };
+  hacks = new Hacks({
     vehicle, weapons, destruction, effects, model, rig, G, sound, world,
     toast: (m, k, ms) => hud.toast(m, k, ms),
-    setTimeOfDay, aimPoint, teleportTo, nuke, spawn: spawnThing, rebuild: () => rebuild(), setXray, setFreeCam, setPhoto, restorePaint,
+    setTimeOfDay, aimPoint, teleportTo, nuke, spawn: spawnThing, rebuild: () => rebuild(), setXray, setFreeCam, setPhoto, applyLook,
+    profile, onCheats, repair: instantRepair,
   });
 
   // "-" opens the mod menu immediately (not on the next frame) so nothing typed leaks into the game
@@ -793,9 +1049,10 @@ async function boot(hotData = {}) {
   }
 
   // ---------- main loop ----------
-  applyTrim();
+  applyTrim(); applyLook();
   applyQuality();
-  setSandbox(settings.sandbox); setAssist(settings.assist); setUnits(settings.units);
+  setSandbox(settings.sandbox); setAssist(settings.assist); setUnits(settings.units); setPhysics(settings.physics);
+  hud.credits(profile.credits, false);
   rig.mode = 4;
   await progress('Ready', 1);
   $('loading').hidden = true;
@@ -820,6 +1077,17 @@ async function boot(hotData = {}) {
           if (fire && weapons.equipped) weapons.tryFire(model, vehicle, G.aim);
         }
         const sdt = dt * G.timeScale;
+        if (vehicle.phys2) {
+          env.wind.update(sdt);
+          const w = env.wind.sample(camera.position.x, camera.position.z, 2, _v);
+          effectsWind.x = w.x * 0.85; effectsWind.z = w.z * 0.85;
+          // wakes for slipstream: the pace car and cars thrown through the air
+          env.wakes.length = 0;
+          paceCar.update(sdt, env.wakes);
+          for (const b of destruction.bodies) if (b.kind === 'target' && b.alive && !b.sleeping && b.vel.lengthSq() > 100) env.wakes.push({ pos: b.pos, vel: b.vel, hw: 1.2 });
+          // camera shake when the shockwave reaches the camera
+          for (let i = G.shakes.length - 1; i >= 0; i--) { const sh = G.shakes[i]; sh.t -= sdt; if (sh.t <= 0) { rig.trauma = Math.min(1, rig.trauma + sh.amt); G.shakes.splice(i, 1); } }
+        } else if (paceCar.active) paceCar.update(sdt, env.wakes);
         G.acc += sdt;
         let n = 0;
         const t0 = performance.now();
@@ -832,16 +1100,23 @@ async function boot(hotData = {}) {
         destruction.sync();
       } else { input.clicks = 0; }
       const [dx, dy] = input.consumeDrag();
-      if (dx || dy) rig.drag(dx, dy);
-      if (input.wheel) { rig.wheel(input.wheel); input.wheel = 0; }
+      const inGarage = G.overlay === 'garage';
+      if (inGarage) { if (dx) showroom.drag(dx); if (input.wheel) { showroom.wheel(input.wheel); input.wheel = 0; } }
+      else {
+        if (dx || dy) rig.drag(dx, dy);
+        if (input.wheel) { rig.wheel(input.wheel); input.wheel = 0; }
+      }
+      handleCarEvents();
+      dmgVis.update(dt);
+      looseWheels.update(running ? dt * G.timeScale : 0);
 
-      updateCarModel(dt);
-      if (running) emitVehicleFX(dt);
+      if (!inGarage) updateCarModel(dt);
+      if (running) { emitVehicleFX(dt); envFX(dt * G.timeScale); }
       effects.update(running ? dt * G.timeScale : 0);
       world.update(G.time);
       skyMat.uniforms.time.value = G.time;
       rig.trauma = Math.max(rig.trauma, effects.trauma);
-      if (freeCam.on) updateFreeCam(dt); else rig.update(dt, vehicle);
+      if (freeCam.on) updateFreeCam(dt); else if (G.crashCam) updateCrashCam(dt); else rig.update(dt, vehicle);
       const co = window.__sim && window.__sim.camOverride;
       if (co) { camera.position.set(...co.pos); camera.up.set(0, 1, 0); camera.lookAt(...co.look); camera.fov = co.fov || 40; camera.updateProjectionMatrix(); }
       if (controls.boost && vehicle.rear.length && vehicle.thrustN > 1000) rig.fovKick = Math.min(rig.fovKick + dt * 30, 9);
@@ -858,13 +1133,14 @@ async function boot(hotData = {}) {
       if (G.flash) { G.flash = Math.max(0, G.flash - dt * 2.5); hud.flash(G.flash); }
       // sound
       sound.update({ speed: vehicle.vel.length(), powerKW: vehicle.powerKW, liftN: vehicle.lift.reduce((s, t) => s + t.u * t.max, 0) + vehicle.side.reduce((s, t) => s + t.u * t.max, 0), rearN: vehicle.rear.reduce((s, t) => s + t.u * t.max, 0),
-        fan: vehicle.fan.level * (vehicle.contacts ? 1 : 0.2), slip: Math.max(...vehicle.wheels.map(w => w.contact ? w.sliding : 0)), refill: G.refilling, paused: G.paused || G.state !== 'play' });
+        fan: vehicle.fan.level * (vehicle.contacts ? 1 : 0.2), slip: Math.max(...vehicle.wheels.map(w => w.contact ? w.sliding : 0)), refill: G.refilling, paused: G.paused || G.state !== 'play',
+        scrape: vehicle.phys2 && vehicle.scrapes.length ? Math.min(1, vehicle.vel.length() / 20) : 0, leak: vehicle.phys2 && !settings.sandbox && vehicle.air > 0.5 ? Math.min(1, (vehicle.leakRate || 0) * 2) : 0 });
       // HUD
       if (G.state === 'play') {
         G.hudT -= dt; G.canvasT -= dt;
         if (G.hudT <= 0) {
           G.hudT = 1 / 20;
-          hud.update(1 / 20, { vehicle, sandbox: settings.sandbox, refilling: G.refilling, weapons, timers: G.timers, rings: G.rings, airtime: G.jump.active ? G.jump.t : 0, camName: CAMERA_MODES[rig.mode], camMode: rig.mode, xhX: G.xhX, xhY: G.xhY });
+          hud.update(1 / 20, { vehicle, phys2: vehicle.phys2, sandbox: settings.sandbox, refilling: G.refilling, weapons, timers: G.timers, rings: G.rings, airtime: G.jump.active ? G.jump.t : 0, camName: CAMERA_MODES[rig.mode], camMode: rig.mode, xhX: G.xhX, xhY: G.xhY });
         }
         if (G.canvasT <= 0) { G.canvasT = 1 / 30; hud.drawADI(vehicle); hud.drawMinimap(mapImg, vehicle, { markers: markers() }); }
       }
@@ -872,8 +1148,12 @@ async function boot(hotData = {}) {
       const wantOffset = G.state === 'start' && innerWidth > 760;
       if (wantOffset) camera.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.2, 0, innerWidth, innerHeight);
       else if (camera.view && camera.view.enabled) camera.clearViewOffset();
-      // render
-      if (composer) composer.render(); else renderer.render(scene, camera);
+      // render (the garage draws its own showroom instead of the world)
+      if (inGarage) {
+        showroom.update(dt, innerWidth, innerHeight, innerWidth > 760);
+        if (composer) { renderPass.scene = showroom.scene; renderPass.camera = showroom.camera; composer.render(); renderPass.scene = scene; renderPass.camera = camera; }
+        else renderer.render(showroom.scene, showroom.camera);
+      } else if (composer) composer.render(); else renderer.render(scene, camera);
       // fps monitor + automatic quality drop
       G.fpsN++; G.fpsT += rawDt;
       if (G.fpsT >= 1) {
@@ -897,6 +1177,7 @@ async function boot(hotData = {}) {
   // ---------- test hooks ----------
   window.__sim = {
     THREE, vehicle, destruction, weapons, world, model, effects, rig, G, settings, teleports, hacks, setTimeOfDay,
+    profile, garageUI, showroom, openGarage, rewards, paceCar, env, dmgVis, looseWheels, setPhysics,
     startGame, teleport: (i) => teleport(teleports.find(t => t.key === i) || teleports[0]),
     step(n, c) { controls = Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false, boost: false, lift: false, descend: false, roll: 0, fire: false }, c || {}); for (let i = 0; i < n; i++) stepOnce(); weapons.update(n * DT); destruction.sync(); gameplay(n * DT); },
     fireAt(x, y, z) { if (!weapons.equipped) weapons.equip(); return weapons.tryFire(model, vehicle, new THREE.Vector3(x, y, z)); },

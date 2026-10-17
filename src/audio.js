@@ -40,6 +40,8 @@ export class Sound {
     this.wind = loopNoise(this.noise, 'lowpass', 350, 0.5);
     this.tire = loopNoise(this.noise, 'bandpass', 950, 6);
     this.hiss = loopNoise(this.noise, 'highpass', 4000, 0.5);
+    this.scrape = loopNoise(this.noise, 'bandpass', 2600, 3);
+    this.leak = loopNoise(this.noise, 'highpass', 6000, 0.7);
   }
 
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : v, this.ctx.currentTime, 0.05); }
@@ -64,6 +66,8 @@ export class Sound {
     this.wind.f.frequency.setTargetAtTime(250 + sp * 8, t, 0.1);
     this.tire.g.gain.setTargetAtTime(s.paused ? 0 : Math.min(0.22, s.slip * 0.22), t, 0.05);
     this.hiss.g.gain.setTargetAtTime(s.paused ? 0 : (s.refill ? 0.08 : 0), t, 0.1);
+    this.scrape.g.gain.setTargetAtTime(s.paused ? 0 : Math.min(0.25, (s.scrape || 0) * 0.25), t, 0.04);
+    this.leak.g.gain.setTargetAtTime(s.paused ? 0 : Math.min(0.12, (s.leak || 0) * 0.1), t, 0.1);
   }
 
   oneShot(buf, type, freq, gain, dur, opts = {}) {
@@ -87,10 +91,11 @@ export class Sound {
     const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
   }
-  explosion(dist, pan = 0) {
+  // maxDelay: Physics 2.0 lets the boom arrive with the shockwave (up to 3 s away)
+  explosion(dist, pan = 0, maxDelay = 0.6) {
     if (!this.ctx) return;
     const a = Math.min(1, 40 / Math.max(10, dist));
-    const delay = Math.min(0.6, dist / 343);
+    const delay = Math.min(maxDelay, dist / 343);
     setTimeout(() => {
       this.oneShot(this.brown, 'lowpass', 900, 1.6 * a, 2.2, { sweep: 120, pan });
       this.oneShot(this.noise, 'lowpass', 3000, 0.7 * a, 0.5, { sweep: 300, pan });
@@ -101,6 +106,18 @@ export class Sound {
         o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.9);
       }
     }, delay * 1000);
+  }
+  // metal crumpling in a crash
+  crunch(sev) {
+    this.oneShot(this.brown, 'lowpass', 300, Math.min(1.4, 0.4 + sev), 0.5);
+    this.oneShot(this.noise, 'bandpass', 1100, Math.min(0.6, 0.2 + sev * 0.4), 0.35, { sweep: 400 });
+    this.oneShot(this.noise, 'highpass', 3500, Math.min(0.25, sev * 0.2), 0.25);
+  }
+  glass(dist, n = 12) {
+    if (!this.ctx) return;
+    const a = Math.min(1, 25 / Math.max(5, dist));
+    this.oneShot(this.noise, 'highpass', 5000, 0.5 * a, 0.5);
+    for (let i = 0; i < Math.min(6, n / 3); i++) this.tone(2400 + Math.random() * 3000, 0.15 + Math.random() * 0.2, 0.03 * a, 'triangle', Math.random() * 0.25);
   }
   impact(intensity) { this.oneShot(this.brown, 'lowpass', 400, Math.min(1.2, intensity * 0.12), 0.35); this.oneShot(this.noise, 'bandpass', 1800, Math.min(0.3, intensity * 0.02), 0.12); }
   launch() { this.oneShot(this.noise, 'bandpass', 600, 0.6, 0.7, { sweep: 3000 }); this.oneShot(this.brown, 'lowpass', 300, 0.6, 0.4); }

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OBB, addCollider, pointContact, queryBox, makeHit } from './colliders.js';
 import { heightAt } from './terrain.js';
+import { Shockwaves, Glass } from './shockwave.js';
 
 const G = 9.81;
 const _p = new THREE.Vector3(), _r = new THREE.Vector3(), _n = new THREE.Vector3(), _t = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -117,6 +118,9 @@ export class Destruction {
     this.fragBodies = [];
     this.gravityScale = 1;
     this.spare = { concrete: 300, brick: 300, wood: 120, crate: 400, metal: 50 };
+    this.glass = new Glass(scene);
+    this.shock = new Shockwaves(this);
+    this.score = { blocks: 0, barrels: 0, targets: 0 };   // running totals for credits
   }
 
   // ---------- building API (call before finalize) ----------
@@ -159,6 +163,14 @@ export class Destruction {
     this.targets.push(t);
     return t;
   }
+  // glass pane in structure-local coords (centre lx, ly, lz), or in world space with paneAt()
+  pane(s, lx, ly, lz, w, h, localYaw = 0) {
+    const pos = new THREE.Vector3(s.cx + s.cos * lx + s.sin * lz, heightAt(s.cx, s.cz) + ly, s.cz - s.sin * lx + s.cos * lz);
+    const q = s.q.clone();
+    if (localYaw) q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), localYaw));
+    this.glass.add(pos, q, w, h);
+  }
+  paneAt(pos, yaw, w, h) { this.glass.add(pos, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), w, h); }
   prop(obj, half, mass) { // pushable object (cones): starts as sleeping body
     const body = new Body(obj.position, obj.quaternion, half, mass, { obj, offsetY: -half.y });
     body.pos.y += half.y; body.sleeping = true; body.kind = 'prop';
@@ -230,6 +242,7 @@ export class Destruction {
       const c = t.obj.position.clone(); c.y += t.centerY;
       t.col = addCollider(new OBB(c, t.obj.quaternion, t.half, { owner: t, surface: 'metal', grip: 1.0 }));
     }
+    this.glass.finalize(this.blocks);
   }
 
   setBlockMatrix(b, pos, quat) {
@@ -241,6 +254,7 @@ export class Destruction {
   // ---------- explosions ----------
   explode(pos, radius, power, kind = 'rocket') {
     if (this.onExplode) this.onExplode(pos, radius, power, kind);
+    this.shock.spawn(pos, radius, power);
     const list = queryBox(pos.x - radius - 2, pos.z - radius - 2, pos.x + radius + 2, pos.z + radius + 2).slice();
     const touched = new Set();
     let n = 0;
@@ -287,6 +301,7 @@ export class Destruction {
   }
 
   makeBlockBody(b) {
+    if (b.state === 'static') this.score.blocks++;
     b.state = 'dynamic';
     b.col.alive = false;
     const body = new Body(b.pos, b.quat, b.half, b.mass, { mesh: this.meshes[b.mat], block: b });
@@ -300,6 +315,7 @@ export class Destruction {
     this.blast(body, center, strength);
   }
   shatter(b, center, strength) {
+    if (b.state === 'static') this.score.blocks++;
     b.state = 'gone';
     b.col.alive = false;
     _m.makeScale(0, 0, 0);
@@ -342,6 +358,8 @@ export class Destruction {
     return body;
   }
   launchTarget(t, center, strength) {
+    if (t.state === 'static') this.score.targets++;
+    if (t.wobble) { t.obj.quaternion.copy(t.home.quat); t.wobble = null; }
     t.state = 'dynamic';
     t.col.alive = false;
     const p = t.col.c.clone();
@@ -379,10 +397,23 @@ export class Destruction {
         this.pending.splice(i, 1);
         if (b.state !== 'static') continue;
         b.state = 'gone'; b.col.alive = false;
+        this.score.barrels++;
         this.barrelMesh.setMatrixAt(b.index, _m.makeScale(0, 0, 0));
         this.barrelMesh.instanceMatrix.needsUpdate = true;
         this.explode(b.pos.clone(), 8, 1.35, 'barrel');
       }
+    }
+    this.shock.step(dt);
+    this.glass.update(dt);
+    // parked cars rocking after a shockwave passed
+    for (const t of this.targets) {
+      const w = t.wobble;
+      if (!w || t.state !== 'static') continue;
+      w.t += dt;
+      const a = w.amp * Math.exp(-w.t * 3) * Math.sin(w.t * 14);
+      _q.setFromAxisAngle(_u.set(Math.cos(w.dir), 0, -Math.sin(w.dir)), a);
+      t.obj.quaternion.copy(t.home.quat).premultiply(_q);
+      if (w.t > 1.6) { t.obj.quaternion.copy(t.home.quat); t.wobble = null; }
     }
     // spatial hash of all live bodies
     const hash = this.hash; hash.clear();
@@ -530,6 +561,7 @@ export class Destruction {
             b.applyImpulse(J, _p);
             J.multiplyScalar(-1);
             v.applyImpulse(J, _p);
+            if (vn < -7 && b.mass > 120 && v.debrisHit) v.debrisHit(_p, _t.copy(_n).negate(), -vn, b.mass);
             if (jn > 3000 && this.onImpact) this.onImpact(_p.clone(), -vn, b);
           }
           break;
@@ -699,7 +731,10 @@ export class Destruction {
     }
     if (this.barrelMesh) this.barrelMesh.instanceMatrix.needsUpdate = true;
     this.pending.length = 0;
+    this.glass.rebuild();
+    this.shock.clear();
     for (const t of this.targets) {
+      t.wobble = null;
       if (t.body) { t.body.alive = false; t.body = null; }
       t.state = 'static'; t.col.alive = true;
       t.obj.position.copy(t.home.pos); t.obj.quaternion.copy(t.home.quat);

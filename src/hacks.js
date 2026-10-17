@@ -35,7 +35,7 @@ function sha256(str) {
 
 const GRAVITY = [['Earth', 1], ['Mars', 0.38], ['Moon', 0.165], ['Zero-G', 0], ['Jupiter', 2.5]];
 const TOD = [['Day', 'day'], ['Golden hour', 'golden'], ['Sunset', 'sunset'], ['Night', 'night']];
-const SPAWNS = [['Crate tower', 'crates'], ['Concrete tower', 'tower'], ['Brick wall', 'wall'], ['Barrel pile', 'barrels'], ['Car', 'car'], ['Semi', 'semi'], ['Jump ramp', 'ramp']];
+const SPAWNS = [['Crate tower', 'crates'], ['Concrete tower', 'tower'], ['Brick wall', 'wall'], ['Barrel pile', 'barrels'], ['Car', 'car'], ['Semi', 'semi'], ['Jump ramp', 'ramp'], ['Pace car (slipstream)', 'pace']];
 
 // every option in the menu
 const DEFS = [
@@ -48,6 +48,8 @@ const DEFS = [
   { tab: 'Car', id: 'stickyFan', label: 'Super-sticky fan (3×)', type: 'toggle', def: false },
   { tab: 'Car', id: 'driftMode', label: 'Drift mode (stability control off)', type: 'toggle', def: false },
   { tab: 'Car', id: 'wrecking', label: 'Wrecking ball (ram to destroy)', type: 'toggle', def: false },
+  { tab: 'Car', id: 'noDamage', label: 'Damage off', type: 'toggle', def: false },
+  { tab: 'Car', id: 'noTireHeat', label: 'Tire heat off', type: 'toggle', def: false },
   { tab: 'Flight', id: 'infiniteAir', label: 'Infinite air', type: 'toggle', def: false },
   { tab: 'Flight', id: 'thrust', label: 'Thruster power', type: 'slider', min: 1, max: 5, step: 0.25, def: 1, unit: '×' },
   { tab: 'Flight', id: 'ghost', label: 'Ghost mode (no-clip)', type: 'toggle', def: false },
@@ -64,6 +66,7 @@ const DEFS = [
   { tab: 'World', id: 'timeScale', label: 'Game speed (bullet time [Y])', type: 'slider', min: 0.1, max: 2, step: 0.05, def: 1, unit: '×' },
   { tab: 'World', id: 'tod', label: 'Time of day', type: 'select', options: TOD, def: 'day' },
   { tab: 'World', id: 'spawnKind', label: 'Spawn at crosshair [U]', type: 'select', options: SPAWNS, def: 'crates', button: 'SPAWN' },
+  { tab: 'World', id: 'paceSpeed', label: 'Pace car speed', type: 'slider', min: 40, max: 230, step: 10, def: 120, unit: ' mph' },
   { tab: 'World', id: 'doDetonate', label: 'Detonate every barrel', type: 'button', text: 'BOOM' },
   { tab: 'World', id: 'doCollapse', label: 'Collapse every building', type: 'button', text: 'COLLAPSE' },
   { tab: 'World', id: 'doRebuild', label: 'Rebuild the world', type: 'button', text: 'REBUILD' },
@@ -80,9 +83,13 @@ const DEFS = [
   { tab: 'Visual', id: 'fps', label: 'FPS / performance counter', type: 'toggle', def: false },
   { tab: 'Visual', id: 'freeCam', label: 'Free camera [I]', type: 'toggle', def: false },
   { tab: 'Visual', id: 'photo', label: 'Photo mode, hide HUD [O]', type: 'toggle', def: false },
+  { tab: 'Visual', id: 'crashCam', label: 'Slow-motion crash cam', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'unlimitedCredits', label: 'Unlimited credits', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'unlockAll', label: 'Unlock all upgrades & parts', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'doRepair', label: 'Instant repair [Z]', type: 'button', text: 'REPAIR' },
 ];
-const TABS = ['Car', 'Flight', 'Weapons', 'World', 'Visual', 'Keys'];
-const KEYS = [['-', 'Show / hide this menu'], ['J', 'Moon jump'], ['T', 'Teleport to the crosshair'], ['K', 'Nuke the crosshair'], ['L', 'Airstrike the crosshair'], ['U', 'Spawn the selected object'], ['Y', 'Bullet time on / off'], ['I', 'Free camera'], ['O', 'Photo mode'], ['Q / E', 'Barrel roll (in the air)']];
+const TABS = ['Car', 'Flight', 'Weapons', 'World', 'Visual', 'Garage', 'Keys'];
+const KEYS = [['-', 'Show / hide this menu'], ['J', 'Moon jump'], ['T', 'Teleport to the crosshair'], ['K', 'Nuke the crosshair'], ['L', 'Airstrike the crosshair'], ['U', 'Spawn the selected object'], ['Y', 'Bullet time on / off'], ['I', 'Free camera'], ['O', 'Photo mode'], ['Z', 'Instant repair'], ['Q / E', 'Barrel roll (in the air)']];
 const BOOT_LINES = [
   'connecting to roadster ECU', 'bypassing fan limiter', 'unlocking 10x thrusters', 'patching gravity.dll',
   'injecting rocket_pod.sys', 'disabling speed governor', 'overclocking cold-gas valves', 'spoofing air tank sensor',
@@ -246,7 +253,9 @@ export class Hacks {
     if (!this.unlocked) return;
     const a = this.api, v = a.vehicle, h = v.hack, val = this.v[id];
     switch (id) {
-      case 'power': case 'topSpeed': case 'grip': case 'thrust': case 'noFlip': case 'stickyFan': case 'infiniteAir': case 'rollAnyTrim': h[id] = val; break;
+      case 'power': case 'topSpeed': case 'grip': case 'thrust': case 'noFlip': case 'stickyFan': case 'infiniteAir': case 'rollAnyTrim': case 'noDamage': case 'noTireHeat': h[id] = val; break;
+      case 'unlimitedCredits': a.profile.cheats.unlimited = !!val; a.onCheats(); break;
+      case 'unlockAll': a.profile.cheats.unlockAll = !!val; a.onCheats(); break;
       case 'gravity': h.gravity = val; a.destruction.gravityScale = this.v.floatDebris ? 0 : val; break;
       case 'floatDebris': a.destruction.gravityScale = val ? 0 : this.v.gravity; for (const b of a.destruction.bodies) b.wake(); break;
       case 'scale': if (h.scale !== val) { v.setScale(val); a.model.group.scale.setScalar(val); a.rig.carScale = val; v.pos.y += Math.max(0, (val - 1) * 0.5); } break;
@@ -257,15 +266,13 @@ export class Hacks {
       case 'blast': a.weapons.hack.blast = val; break;
       case 'timeScale': a.G.timeScale = val; this.bulletPrev = null; break;
       case 'tod': a.setTimeOfDay(val); break;
-      case 'paint': if (val) a.model.setPaint({ color: val, metal: 0.5, rough: 0.3 }); break;
-      case 'smoke': { const c = new THREE.Color(val); a.effects.vapor = [c.r, c.g, c.b]; break; }
-      case 'underglow': case 'glowColor': a.model.underglow.visible = !!this.v.underglow; a.model.underglow.material.color.set(this.v.glowColor); break;
+      case 'paint': case 'smoke': case 'underglow': case 'glowColor': a.applyLook(); break;
       case 'fov': a.rig.fovAdd = val; break;
       case 'xray': a.setXray(val); break;
       case 'fps': $('hk-fps').hidden = !val; break;
       case 'freeCam': a.setFreeCam(val); break;
       case 'photo': a.setPhoto(val); break;
-      case 'rainbow': case 'disco': if (!this.v.rainbow && !this.v.disco) a.restorePaint(this.v.paint); break;
+      case 'rainbow': case 'disco': if (!this.v.rainbow && !this.v.disco) a.applyLook(); break;
       default: break;
     }
   }
@@ -281,6 +288,7 @@ export class Hacks {
       case 'doDetonate': a.toast(`${a.destruction.detonateAll()} barrels armed`, 'warn', 1800); break;
       case 'doCollapse': a.toast(`${a.destruction.collapseAll()} blocks knocked loose`, 'warn', 1800); break;
       case 'doRebuild': a.rebuild(); break;
+      case 'doRepair': a.repair(); break;
       default: break;
     }
   }
@@ -302,6 +310,7 @@ export class Hacks {
       }
       case 'KeyI': this.set('freeCam', !this.v.freeCam); this.renderBody(); return true;
       case 'KeyO': this.set('photo', !this.v.photo); this.renderBody(); return true;
+      case 'KeyZ': this.action('doRepair'); return true;
       default: return false;
     }
   }

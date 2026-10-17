@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { buildHeights, heightAt } from '../src/terrain.js';
 import { Vehicle } from '../src/vehicle.js';
+// PHYSICS=classic runs the pre-2.0 physics (must match the old numbers exactly)
+if (process.env.PHYSICS === 'classic') Vehicle.defaults.phys2 = false;
 import { TRIMS, PHYS, MPH } from '../src/config.js';
 
 buildHeights();

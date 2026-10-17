@@ -268,8 +268,12 @@ export class World {
     roof.castShadow = true; this.scene.add(roof);
     const strip = new THREE.Mesh(new THREE.BoxGeometry(44.2, 0.4, 0.3), this.mats.glowCyan);
     strip.position.set(hx, 12.4, hz - 15.1); this.scene.add(strip);
-    // ops building + tower
+    // ops building + tower (its windows can be blown out by shockwaves)
     this.box(58, 0, 58, 22, 7, 16, this.mats.concrete);
+    for (let i = 0; i < 5; i++) {
+      this.d.paneAt(new THREE.Vector3(49 + i * 4.2, 3.6, 49.97), 0, 2.6, 2.0);
+      if (i < 4) this.d.paneAt(new THREE.Vector3(46.97, 3.6, 52 + i * 3.8), Math.PI / 2, 2.4, 2.0);
+    }
     this.box(64, 7, 62, 6, 16, 6, this.mats.concrete);
     const cab = new THREE.Mesh(new THREE.CylinderGeometry(5, 4, 4, 8), this.mats.glass);
     cab.position.set(64, 25, 62); cab.castShadow = true; this.scene.add(cab);
@@ -674,6 +678,15 @@ export class World {
             });
           }
         }
+        // glass in the window openings (rows 1-2)
+        const wy = f * (floorH + 0.3) + 1.6;
+        for (const wz of [-D / 2 + bt / 2, D / 2 - bt / 2]) {
+          for (let x = -W / 2 + 1.5; x < W / 2 - 1; x += 3) {
+            if (f === 0 && wz < 0 && Math.abs(x) < 1.0) continue; // door
+            d.pane(s, x, wy, wz, 1.1, 1.5);
+          }
+        }
+        for (const wx of [-W / 2 + bt / 2, W / 2 - bt / 2]) d.pane(s, wx, wy, 0, 1.5, 1.5, Math.PI / 2);
         // slab on top of this floor
         const sy = f * (floorH + 0.3) + floorH;
         for (let x = -W / 2; x < W / 2 - 0.01; x += 2) for (let z = -D / 2; z < D / 2 - 0.01; z += 2) {

@@ -1,5 +1,6 @@
 // Dashboard + overlays: speed cluster, thruster diagram, air tank, attitude indicator,
-// minimap, big map, timers, zone banners and toasts.
+// minimap, big map, timers, zone banners and toasts. Physics 2.0 adds tire temperature / tread and
+// panel damage on the car outline, real tank pressure and temperature, slipstream, leak and wind.
 import { MPH, KMH, PHYS } from './config.js';
 import { ZONES } from './terrain.js';
 
@@ -20,7 +21,7 @@ export class HUD {
     this.el = {};
     for (const id of ['spd', 'unit', 'kw', 'gg', 'kn', 'pwr', 'regen', 'air-ring', 'air-kg', 'air-sub', 'air-hover', 'fan-kg', 'fan-bar', 'h-mode', 'h-trim',
       'c-assist', 'c-fan', 'c-air', 'c-cam', 'c-gun', 'f-alt', 'f-vs', 'f-pitch', 'f-roll', 'f-air', 'ammo', 'xh', 't-060', 't-060b', 't-qm', 't-top', 't-ringw', 't-ring', 't-ringt',
-      'z-name', 'z-tip', 'zone', 'compass', 'flash']) this.el[id] = $(id);
+      'z-name', 'z-tip', 'zone', 'compass', 'flash', 'h-cr', 'c-draft', 'c-leak', 'cond']) this.el[id] = $(id);
     this.gears = { P: $('g-P'), R: $('g-R'), N: $('g-N'), D: $('g-D') };
     this.mini = $('minimap').getContext('2d');
     this.adi = $('adi').getContext('2d');
@@ -32,6 +33,62 @@ export class HUD {
   }
 
   setText(id, v) { if (this.lastText[id] !== v) { this.lastText[id] = v; this.el[id].textContent = v; } }
+  setAttr(el, k, v) { if (el.getAttribute(k) !== v) el.setAttribute(k, v); }
+
+  credits(n, unlimited) {
+    this.setText('h-cr', unlimited ? '∞ CR' : Math.round(n).toLocaleString('en-US') + ' CR');
+    const el = this.el['h-cr'];
+    if (this.lastCr !== undefined && n > this.lastCr && !unlimited) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+    this.lastCr = n;
+  }
+
+  // tires (temperature colour, tread left) and panel damage drawn on the car outline
+  buildStatus() {
+    const g = $('tstat');
+    g.innerHTML = '';
+    const mk = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); g.appendChild(e); return e; };
+    this.zonesEl = {
+      front: mk('path', { d: 'M -22 -73 C -10 -77 10 -77 22 -73', class: 'zn' }),
+      rear: mk('path', { d: 'M -24 72 C -10 77 10 77 24 72', class: 'zn' }),
+      left: mk('path', { d: 'M -36 -30 L -37 35', class: 'zn' }),
+      right: mk('path', { d: 'M 36 -30 L 37 35', class: 'zn' }),
+      top: mk('path', { d: 'M -20 -26 C -20 -38 20 -38 20 -26 L 22 22 C 22 34 -22 34 -22 22 Z', class: 'zn zfill' }),
+    };
+    // wheel order FL, FR, RL, RR; car +x (left) is drawn on the left
+    this.tires = [[-41, -50], [41, -50], [-41, 50], [41, 50]].map(([x, y]) => {
+      const frame = mk('rect', { x: x - 4, y: y - 11, width: 8, height: 22, rx: 2.5, class: 'tire' });
+      const fill = mk('rect', { x: x - 2.5, y: y - 9.5, width: 5, height: 19, rx: 1.5, class: 'tread' });
+      return { frame, fill, y, last: '' };
+    });
+  }
+  updateStatus(v, phys2) {
+    const g = $('tstat');
+    if (!this.tires) this.buildStatus();
+    g.style.display = phys2 ? '' : 'none';
+    if (!phys2) { this.el.cond.hidden = true; return; }
+    v.wheels.forEach((w, i) => {
+      const t = this.tires[i];
+      const T = w.temp;
+      const col = w.broken ? '#ff4d4d' : T < 45 ? '#5c8cff' : T < 115 ? '#46f0a0' : T < 145 ? '#ffb547' : '#ff4d4d';
+      const h = w.broken ? 0 : Math.max(1, 19 * (1 - w.wear));
+      const key = col + h.toFixed(0) + (w.flat > 0.3 ? 'f' : '') + (w.broken ? 'b' : '');
+      if (key === t.last) return;
+      t.last = key;
+      t.fill.setAttribute('fill', col); t.fill.setAttribute('height', h.toFixed(1)); t.fill.setAttribute('y', (t.y + 9.5 - h).toFixed(1));
+      t.frame.setAttribute('class', 'tire' + (w.broken ? ' gone' : w.flat > 0.3 ? ' flat' : ''));
+    });
+    const z = v.damage.zones;
+    for (const k in this.zonesEl) {
+      const d = k === 'top' ? Math.max(z.top, z.bottom) : z[k];
+      const col = d < 0.05 ? 'transparent' : d < 0.4 ? '#ffb547' : '#ff4d4d';
+      this.setAttr(this.zonesEl[k], 'stroke', k === 'top' ? 'transparent' : col);
+      if (k === 'top') this.setAttr(this.zonesEl[k], 'fill', d < 0.05 ? 'transparent' : (d < 0.4 ? 'rgba(255,181,71,.25)' : 'rgba(255,77,77,.3)'));
+    }
+    const c = v.damage.condition(v);
+    this.el.cond.hidden = c > 0.995;
+    this.setText('cond', `CAR ${Math.round(c * 100)}%`);
+    this.el.cond.dataset.bad = c < 0.6 ? '1' : '0';
+  }
 
   buildThrusterDots(vehicle) {
     const g = $('tdots');
@@ -109,9 +166,12 @@ export class HUD {
       this.el['air-ring'].style.strokeDashoffset = String(276.5 * (1 - frac));
       this.el['air-ring'].style.stroke = frac < 0.15 ? '#ff4d4d' : (frac < 0.35 ? '#ffb547' : '#7fe3ff');
       this.setText('air-kg', s.sandbox ? '∞' : String(Math.round(v.air)));
-      this.setText('air-sub', s.sandbox ? 'SANDBOX' : `KG · ${Math.round(PHYS.TANK_PSI * frac)} PSI`);
-      const hoverKgS = v.mass * PHYS.G / PHYS.EXHAUST_V;
-      const hov = v.canFly ? (s.sandbox ? 'unlimited air' : (s.refilling ? 'refilling…' : `hover ≈ ${(v.air / hoverKgS).toFixed(1)} s`)) : (s.sandbox ? 'unlimited air' : `boost ≈ ${(v.air / (v.trim.rearThrust * 4 / PHYS.EXHAUST_V)).toFixed(1)} s`);
+      const psi = s.phys2 ? v.tankPsi : PHYS.TANK_PSI * frac;
+      this.setText('air-sub', s.sandbox ? 'SANDBOX' : `KG · ${Math.round(psi)} PSI`);
+      const ve = s.phys2 ? 650 * Math.sqrt(v.tankT / 301.15) : PHYS.EXHAUST_V;
+      const hoverKgS = v.mass * PHYS.G / ve;
+      let hov = v.canFly ? (s.sandbox ? 'unlimited air' : (s.refilling ? 'refilling…' : `hover ≈ ${(v.air / hoverKgS).toFixed(1)} s`)) : (s.sandbox ? 'unlimited air' : `boost ≈ ${(v.air / (v.trim.rearThrust * 4 / ve)).toFixed(1)} s`);
+      if (s.phys2 && !s.sandbox) hov += ` · ${Math.round(v.tankT - 273.15)} °C`;
       this.setText('air-hover', hov);
     } else {
       this.el['air-ring'].style.strokeDashoffset = '276.5';
@@ -131,6 +191,11 @@ export class HUD {
     this.setText('c-air', s.sandbox ? 'AIR SANDBOX' : 'AIR REAL');
     this.setText('c-cam', s.camName.toUpperCase() + ' CAM');
     this.el['c-gun'].hidden = !s.weapons.equipped;
+    const draft = s.phys2 ? v.draft : 0;
+    this.el['c-draft'].hidden = draft < 0.04;
+    if (draft >= 0.04) this.setText('c-draft', `SLIPSTREAM −${Math.round(draft * 100)}% DRAG`);
+    this.el['c-leak'].hidden = !(s.phys2 && v.leakRate > 0.01 && v.air > 0.5 && !s.sandbox);
+    this.updateStatus(v, s.phys2);
 
     // flight data
     const alt = v.agl;
@@ -173,7 +238,15 @@ export class HUD {
     // compass
     const hdg = ((Math.atan2(v.fwd.x, -v.fwd.z) * 180 / Math.PI) + 360) % 360;
     const card = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(hdg / 45) % 8];
-    this.setText('compass', `${card} ${String(Math.round(hdg)).padStart(3, '0')}°`);
+    let wind = '';
+    if (s.phys2) {
+      // arrow shows where the wind blows relative to the car's nose
+      const ws = Math.hypot(v.wind.x, v.wind.z);
+      const rel = (Math.atan2(v.wind.x, v.wind.z) - Math.atan2(v.fwd.x, v.fwd.z) + Math.PI * 4) % (Math.PI * 2);
+      const arrows = ['↑', '↖', '←', '↙', '↓', '↘', '→', '↗'];
+      if (ws > 0.5) wind = ` · WIND ${arrows[Math.round(rel / (Math.PI / 4)) % 8]} ${Math.round(ws)} m/s`;
+    }
+    this.setText('compass', `${card} ${String(Math.round(hdg)).padStart(3, '0')}°${wind}`);
   }
 
   drawADI(v) {

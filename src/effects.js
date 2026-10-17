@@ -2,6 +2,7 @@
 // explosions with flash lights and shockwaves, scorch marks and skid marks.
 import * as THREE from 'three';
 import { heightAt, normalAt } from './terrain.js';
+import { frontRadius } from './shockwave.js';
 
 function softTexture(kind) {
   const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -83,6 +84,7 @@ class ParticleSystem {
     this.mesh.renderOrder = additive ? 11 : 10;
     scene.add(this.mesh);
     this.budget = 1;
+    this.wind = null;   // {x, z} drift (Physics 2.0); particles relax toward it instead of to rest
   }
   spawn(x, y, z, vx, vy, vz, life, s0, s1, r, g, b, a, o = {}) {
     if (this.n >= this.cap) return;
@@ -107,7 +109,9 @@ class ParticleSystem {
       }
       this.age[w] = age;
       const dr = Math.exp(-this.drag[w] * dt);
-      this.vx[w] *= dr; this.vy[w] = this.vy[w] * dr - this.grav[w] * dt; this.vz[w] *= dr;
+      if (this.wind) { const wx = this.wind.x, wz = this.wind.z; this.vx[w] = wx + (this.vx[w] - wx) * dr; this.vz[w] = wz + (this.vz[w] - wz) * dr; }
+      else { this.vx[w] *= dr; this.vz[w] *= dr; }
+      this.vy[w] = this.vy[w] * dr - this.grav[w] * dt;
       this.px[w] += this.vx[w] * dt; this.py[w] += this.vy[w] * dt; this.pz[w] += this.vz[w] * dt;
       this.rot[w] += this.rv[w] * dt;
       const t = age / this.life[w];
@@ -183,6 +187,15 @@ export class Effects {
       m.visible = false; scene.add(m);
       this.rings.push({ m, t: 1, r: 1 });
     }
+    // Physics 2.0: faint pressure shells that grow with the real shock front
+    this.shells = [];
+    const shellGeo = new THREE.SphereGeometry(1, 32, 16);
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(shellGeo, new THREE.MeshBasicMaterial({ color: '#fff4e0', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false }));
+      m.visible = false; m.renderOrder = 12; scene.add(m);
+      this.shells.push({ m, s: null });
+    }
+    this.shockFronts = true;  // set false in Classic
     // scorch decals
     const sc = document.createElement('canvas'); sc.width = sc.height = 128;
     const g = sc.getContext('2d');
@@ -241,6 +254,12 @@ export class Effects {
       m.scale.set(sz, 1, sz); m.rotation.y = Math.random() * 6;
       const r = this.rings.find(r => r.t >= 1) || this.rings[0];
       r.t = 0; r.r = radius * 3.2; r.m.visible = true; r.m.position.set(pos.x, gh + 0.3, pos.z);
+      r.shock = this.shockFronts ? { radius, age: 0, maxR: radius * 7 * Math.sqrt(Math.max(1, power)), gh } : null;
+    }
+    if (this.shockFronts) {
+      const sh = this.shells.find(x => !x.s) || this.shells[0];
+      sh.s = { radius, age: 0, maxR: radius * 7 * Math.sqrt(Math.max(1, power)), a: Math.min(0.35, 0.06 + 0.05 * power * radius / 9) };
+      sh.m.position.copy(pos); sh.m.visible = true;
     }
     const L = this.lights.find(l => l.t <= 0) || this.lights[0];
     L.l.position.copy(pos); L.l.position.y += 1.5; L.t = 0.45; L.max = 22000 * power * s * s;
@@ -254,6 +273,7 @@ export class Effects {
     for (let i = 0; i < 2; i++) {
       const r = this.rings.find(rr => rr.t >= 1) || this.rings[i];
       r.t = -i * 0.25; r.r = 220; r.m.visible = true; r.m.position.set(pos.x, gh + 0.5, pos.z);
+      r.shock = this.shockFronts && i === 0 ? { radius: 38, age: 0, maxR: 38 * 7 * Math.sqrt(3.5), gh } : null;
     }
     this.emitters.push({ t: 0, dur: 6, fn: (t, dt) => {
       const top = Math.min(t, 3) * 28;
@@ -286,13 +306,45 @@ export class Effects {
     }
     for (const r of this.rings) {
       if (r.t >= 1) continue;
-      r.t = Math.min(1, r.t + dt * (r.r > 100 ? 0.6 : 2.2));
-      const s = r.r * (0.15 + Math.max(0, r.t));
-      r.m.scale.set(s, 1, s);
-      r.m.material.opacity = r.t < 0 ? 0 : (1 - r.t) * 0.8;
+      if (r.shock) {
+        // ring rides the real shock front; dust kicks up where it passes
+        const sk = r.shock; sk.age += dt;
+        const R = frontRadius(sk.radius, sk.age), k = R / sk.maxR;
+        r.t = k >= 1 ? 1 : 0;
+        r.m.scale.set(R, 1, R);
+        r.m.material.opacity = Math.max(0, 1 - k) * 0.8;
+        if (dt > 0 && R < 220) {
+          const n = Math.min(8, dt * 90 * (1 - k));
+          for (let i = 0; i < n; i++) {
+            const a = Math.random() * Math.PI * 2, x = r.m.position.x + Math.cos(a) * R, z = r.m.position.z + Math.sin(a) * R;
+            this.smoke.spawn(x, heightAt(x, z) + 0.4, z, Math.cos(a) * 6, 0.8 + Math.random(), Math.sin(a) * 6, 1.2 + Math.random(), 1.2, 4, 0.6, 0.52, 0.42, 0.35 * (1 - k), { drag: 2.5 });
+          }
+        }
+      } else {
+        r.t = Math.min(1, r.t + dt * (r.r > 100 ? 0.6 : 2.2));
+        const s = r.r * (0.15 + Math.max(0, r.t));
+        r.m.scale.set(s, 1, s);
+        r.m.material.opacity = r.t < 0 ? 0 : (1 - r.t) * 0.8;
+      }
       if (r.t >= 1) r.m.visible = false;
     }
+    for (const sh of this.shells) {
+      if (!sh.s) continue;
+      sh.s.age += dt;
+      const R = frontRadius(sh.s.radius, sh.s.age), k = R / sh.s.maxR;
+      sh.m.scale.setScalar(R);
+      sh.m.material.opacity = sh.s.a * Math.max(0, 1 - k) ** 3;
+      if (k >= 1) { sh.s = null; sh.m.visible = false; }
+    }
     this.trauma = Math.max(0, this.trauma - dt * 1.2);
+  }
+
+  // bright sparks from metal scraping
+  sparks(x, y, z, vx, vy, vz, n) {
+    for (let i = 0; i < n; i++) {
+      this.fire.spawn(x, y, z, vx * 0.6 + (Math.random() - 0.5) * 5, Math.random() * 4 + 1, vz * 0.6 + (Math.random() - 0.5) * 5,
+        0.25 + Math.random() * 0.35, 0.12, 0.04, 1, 0.75, 0.35, 1, { r1: 1, g1: 0.35, b1: 0.05, drag: 1.2, grav: 14 });
+    }
   }
 
   clear() {

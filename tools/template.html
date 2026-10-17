@@ -190,7 +190,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 
 
 /* ---------- mod menu ---------- */
-#hk-menu { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(134px + env(safe-area-inset-top, 0px)); width: min(390px, calc(100vw - 32px)); max-height: calc(100% - 370px); min-height: 280px; display: flex; flex-direction: column; z-index: 8; background: rgba(9, 6, 18, .94); border: 1px solid rgba(177, 76, 255, .55); border-radius: 10px; box-shadow: 0 0 0 1px rgba(61, 242, 255, .12), 0 14px 40px rgba(0, 0, 0, .6), 0 0 34px rgba(177, 76, 255, .22); overflow: hidden; }
+#hk-menu { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(134px + env(safe-area-inset-top, 0px)); width: min(430px, calc(100vw - 32px)); max-height: calc(100% - 370px); min-height: 280px; display: flex; flex-direction: column; z-index: 8; background: rgba(9, 6, 18, .94); border: 1px solid rgba(177, 76, 255, .55); border-radius: 10px; box-shadow: 0 0 0 1px rgba(61, 242, 255, .12), 0 14px 40px rgba(0, 0, 0, .6), 0 0 34px rgba(177, 76, 255, .22); overflow: hidden; }
 #hk-menu.in { animation: hkIn .38s cubic-bezier(.2, .9, .3, 1.15); }
 @keyframes hkIn { from { opacity: 0; transform: translateX(-34px) scale(.97); } }
 .hk-head { position: relative; padding: 12px 14px 10px; background: linear-gradient(120deg, #2c0f4e, #120a24 58%, #052129); border-bottom: 1px solid rgba(177, 76, 255, .4); overflow: hidden; }
@@ -235,7 +235,82 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 #hk-load.done .hk-term { animation: hkGrant .7s; border-color: #7dffb0; }
 @keyframes hkGrant { 0% { box-shadow: 0 0 0 rgba(125, 255, 176, 0); } 30% { box-shadow: 0 0 80px rgba(125, 255, 176, .7); } 100% { box-shadow: 0 0 40px rgba(61, 242, 255, .2); } }
 #hk-fps { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(244px + env(safe-area-inset-top, 0px)); text-align: right; z-index: 6; font: 600 .76rem/1 ui-monospace, Consolas, monospace; color: #7dffb0; text-shadow: 0 1px 4px #000; pointer-events: none; }
-body.photo #hud, body.photo #toasts, body.photo #hk-menu, body.photo #vign { display: none !important; }
+body.photo #hud, body.photo #toasts, body.photo #hk-menu, body.photo #vign, body.photo #cine span { display: none !important; }
+
+/* ---------- v2: credits, car status, crash cam ---------- */
+#h-cr { font: 700 .82rem/1 var(--f-display); letter-spacing: .08em; color: var(--amber); padding: 3px 7px; border-radius: 4px; border: 1px solid rgba(255,181,71,.35); margin-left: auto; white-space: nowrap; }
+#h-cr.pop { animation: crPop .6s ease-out; }
+@keyframes crPop { 30% { background: rgba(255,181,71,.35); transform: scale(1.12); } }
+#tl .brand { flex-wrap: nowrap; }
+.chip.draft { color: var(--good); border-color: rgba(70,240,160,.5); }
+.chip.leak { color: var(--red); border-color: rgba(255,77,77,.55); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.tire { fill: rgba(10,13,17,.85); stroke: rgba(255,255,255,.35); stroke-width: 1; }
+.tire.flat { stroke: var(--amber); stroke-dasharray: 2 2; }
+.tire.gone { stroke: var(--red); stroke-dasharray: 2 2; fill: transparent; }
+.tread { fill: #5c8cff; }
+.zn { fill: none; stroke: transparent; stroke-width: 3.5; stroke-linecap: round; }
+.zn.zfill { stroke-width: 0; }
+#cond { position: absolute; left: 12px; bottom: 6px; font: 700 .66rem/1 var(--f-display); letter-spacing: .12em; color: var(--amber); }
+#cond[data-bad="1"] { color: var(--red); }
+#cine { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+#cine::before, #cine::after { content: ""; position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
+#cine::before { top: 0; } #cine::after { bottom: 0; }
+#cine span { position: absolute; left: 50%; top: calc(11vh + 14px); transform: translateX(-50%); font: 800 .9rem/1 var(--f-display); letter-spacing: .4em; color: var(--red); text-shadow: 0 0 10px rgba(0,0,0,.8); }
+
+/* ---------- garage ---------- */
+#garage { background: linear-gradient(90deg, rgba(5,7,9,.95) 0%, rgba(5,7,9,.82) 34%, rgba(5,7,9,0) 52%); pointer-events: none; overflow: hidden; }
+.gpanel { width: min(470px, 100%); max-height: 100%; overflow-y: auto; display: grid; gap: 12px; padding: 0 6px 8px 0; pointer-events: auto; align-content: start; scrollbar-width: thin; }
+.ghead { display: flex; justify-content: space-between; align-items: end; gap: 12px; }
+.ghead h2 { margin: 2px 0 0; font: 800 2.6rem/.9 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.gcr { display: grid; justify-items: end; gap: 4px; }
+.gcr b { font: 700 1.7rem/1 var(--f-display); color: var(--amber); letter-spacing: .03em; }
+.gtabs { display: flex; gap: 6px; }
+.gtabs button { flex: 1; padding: 9px 4px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.04); font: 700 .86rem/1 var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.gtabs button[aria-pressed="true"] { color: var(--ink); border-color: var(--ice); background: rgba(127,227,255,.1); }
+.gtrim { width: 100%; } .gtrim button { flex: 1; }
+#g-body { display: grid; gap: 8px; }
+.gup { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+.gun b { display: block; font: 800 1.15rem/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.gun span { font: 600 .66rem/1 var(--f-display); letter-spacing: .12em; color: var(--ice); text-transform: uppercase; }
+.gpips { display: flex; gap: 4px; justify-self: end; }
+.pip { padding: 5px 7px; border-radius: 5px; border: 1px solid var(--line); background: transparent; font: 700 .72rem/1 var(--f-display); letter-spacing: .06em; color: var(--muted); }
+.pip[aria-pressed="true"] { background: var(--ice); color: #041015; border-color: transparent; }
+.pip:disabled { opacity: .3; cursor: default; }
+.gbuy { justify-self: start; padding: 7px 10px; font-size: .82rem; color: var(--amber); border-color: rgba(255,181,71,.45); }
+.gbuy[data-poor="1"] { color: var(--dim); border-color: var(--line); }
+.gmax { font: 700 .74rem/1 var(--f-display); letter-spacing: .14em; color: var(--good); }
+.gtx { grid-column: 1 / -1; margin: 0; font-size: .8rem; line-height: 1.35; color: #b7c3cc; }
+.gsec h3 { display: flex; justify-content: space-between; margin: 4px 0 7px; }
+.gsec h3 span { color: var(--ink); letter-spacing: .04em; text-transform: none; font-weight: 600; }
+.gsw { display: flex; flex-wrap: wrap; gap: 8px; }
+.gsw .sw { position: relative; width: 32px; height: 32px; }
+.gsw .sw.none { background: repeating-linear-gradient(45deg, #222 0 4px, #333 4px 8px) !important; }
+.lock { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); padding: 1px 3px; border-radius: 3px; background: #06090c; border: 1px solid rgba(255,181,71,.5); font: 700 .55rem/1 var(--f-display); color: var(--amber); font-style: normal; white-space: nowrap; }
+.gchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip2 { position: relative; padding: 8px 11px 10px; border-radius: 7px; border: 1px solid var(--line); background: rgba(255,255,255,.04); font: 600 .84rem/1 var(--f-display); letter-spacing: .05em; }
+.chip2[aria-pressed="true"] { border-color: var(--ice); background: rgba(127,227,255,.1); }
+.gprev { margin-top: 10px; display: flex; gap: 10px; align-items: center; font-size: .84rem; color: #c9d3da; }
+.gbuild { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); display: grid; gap: 6px; }
+.gbuild p { margin: 0; font-size: .8rem; color: #b7c3cc; }
+.gbh { display: flex; gap: 8px; align-items: center; } .gbh b { font: 800 1.05rem/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.gbh span { font-size: .78rem; color: var(--muted); }
+.gbh .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); }
+.gstats { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.25); display: grid; gap: 6px; }
+.gstats h3 { display: flex; justify-content: space-between; margin: 0 0 2px; }
+.gstats h3 span { color: var(--dim); text-transform: none; letter-spacing: .02em; font-weight: 600; }
+.gst { display: grid; grid-template-columns: 112px 1fr 70px; gap: 8px; align-items: center; font-size: .8rem; color: #c9d3da; }
+.gst b { text-align: right; font: 600 .9rem/1 var(--f-display); color: var(--ink); }
+.gst.gain b { color: var(--good); } .gst.up b { color: var(--amber); }
+.gbar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+.gbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.gbar i.c { background: var(--ice); opacity: .85; } .gbar i.s { background: rgba(255,255,255,.35); z-index: 1; width: 2px !important; left: auto; }
+.gst.up .gbar i.c { background: var(--amber); }
+#g-cond { font-size: .82rem; color: var(--muted); } #g-cond[data-bad="1"] { color: var(--amber); }
+.ghint { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font: 600 .74rem/1 var(--f-display); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.cta2 { padding: 14px 18px; border-radius: 10px; border: 1px solid rgba(255,181,71,.55); background: rgba(255,181,71,.08); color: var(--amber); font: 800 1.05rem/1 var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+.cta2:hover { background: rgba(255,181,71,.16); }
+.cta2 small { display: block; margin-top: 4px; font: 600 .7rem/1 var(--f-display); letter-spacing: .08em; color: var(--muted); text-transform: none; }
 
 /* ---------- updater ---------- */
 #upd { z-index: 16; background: rgba(4, 6, 8, .55); }
@@ -259,6 +334,8 @@ body.photo #hud, body.photo #toasts, body.photo #hk-menu, body.photo #vign { dis
   .pwr { width: 58vw; }
   .trims { grid-template-columns: 1fr; }
   #start { background: rgba(5,7,9,.9); }
+  #garage { background: rgba(5,7,9,.88); }
+  .gst { grid-template-columns: 96px 1fr 64px; }
   #bigmap .inner { grid-template-columns: 1fr; }
   #bigmapc { width: min(92vw, 60vh); height: min(92vw, 60vh); }
 }
@@ -284,13 +361,15 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
 
   <div id="hud" hidden>
     <div id="tl" class="panel">
-      <div class="brand"><b>ROADSTER <i id="h-trim">ROCKET</i></b><span id="h-mode" data-m="drive">DRIVE</span></div>
+      <div class="brand"><b>ROADSTER <i id="h-trim">ROCKET</i></b><span id="h-mode" data-m="drive">DRIVE</span><span id="h-cr" class="num">0 CR</span></div>
       <div class="chips">
         <span class="chip" id="c-assist" data-on="1">ASSIST ON</span>
         <span class="chip" id="c-fan" data-on="1">FAN AUTO</span>
         <span class="chip" id="c-air" data-on="1">AIR REAL</span>
         <span class="chip" id="c-cam">CHASE CAM</span>
         <span class="chip" id="c-gun" data-warn="1" hidden>LAUNCHER</span>
+        <span class="chip draft" id="c-draft" hidden>SLIPSTREAM</span>
+        <span class="chip leak" id="c-leak" hidden>AIR LEAK</span>
       </div>
     </div>
 
@@ -313,9 +392,11 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
       <svg class="car" viewBox="-40 -80 80 160" aria-label="Thruster diagram">
         <path d="M0 -76 C 22 -76 34 -62 35 -40 L 37 40 C 37 64 26 76 0 76 C -26 76 -37 64 -37 40 L -35 -40 C -34 -62 -22 -76 0 -76 Z" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
         <path d="M -20 -26 C -20 -38 20 -38 20 -26 L 22 22 C 22 34 -22 34 -22 22 Z" fill="rgba(127,227,255,.07)" stroke="rgba(255,255,255,.18)"/>
+        <g id="tstat"></g>
         <g id="tdots"></g>
         <text x="0" y="-62" text-anchor="middle" fill="#8d9aa6" font-size="8" font-family="Barlow Condensed, sans-serif" letter-spacing="1">FRONT</text>
       </svg>
+      <div id="cond" hidden>CAR 100%</div>
       <div class="air">
         <div class="label">Air tank</div>
         <svg viewBox="0 0 104 104">
@@ -349,6 +430,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
     </div>
     <div id="xh" hidden></div>
   </div>
+  <div id="cine" hidden><span>CRASH CAM</span></div>
 
 
   <div id="hk-fps" hidden></div>
@@ -395,6 +477,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
       </div>
       <div class="row">
         <button class="cta" id="go">Start driving <kbd>Enter</kbd></button>
+        <button class="cta2" id="go-garage">Garage <kbd>G</kbd><small id="start-cr">0 credits</small></button>
       </div>
       <div class="quick">
         <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive</span>
@@ -407,14 +490,31 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
     </div>
   </div>
 
+  <div id="garage" class="overlay" hidden>
+    <div class="gpanel">
+      <div class="ghead">
+        <div><div class="eyebrow">Air Station HQ</div><h2>Garage</h2></div>
+        <div class="gcr"><span class="label">Credits</span><b id="g-cr" class="num">0</b></div>
+      </div>
+      <div class="seg gtrim" id="g-trims"></div>
+      <div class="gtabs"><button id="gt-up" aria-pressed="true">Upgrades</button><button id="gt-style" aria-pressed="false">Style</button><button id="gt-builds" aria-pressed="false">Builds</button></div>
+      <div id="g-body"></div>
+      <div class="gstats" id="g-stats"></div>
+      <div id="g-cond"></div>
+      <div class="btnrow"><button class="btn primary" id="g-done">Done <kbd>Esc</kbd></button></div>
+    </div>
+    <div class="ghint">Drag to spin · wheel to zoom</div>
+  </div>
+
   <div id="menu" class="overlay" hidden>
     <div class="sheet">
-      <div class="row" style="justify-content:space-between"><h2>Paused</h2><div class="btnrow"><button class="btn primary" id="m-resume">Resume <kbd>P</kbd></button><button class="btn" id="m-garage">Change car</button></div></div>
+      <div class="row" style="justify-content:space-between"><h2>Paused</h2><div class="btnrow"><button class="btn primary" id="m-resume">Resume <kbd>P</kbd></button><button class="btn" id="m-shop">Garage</button><button class="btn" id="m-garage">Change car</button></div></div>
       <div class="grid2">
         <div>
           <h3>Settings</h3>
           <div class="setting"><span>Units</span><div class="seg"><button id="u-mph" aria-pressed="true">mph</button><button id="u-kmh" aria-pressed="false">km/h</button></div></div>
           <div class="setting"><span>Air supply</span><div class="seg"><button id="m-real" aria-pressed="true">Real</button><button id="m-sand" aria-pressed="false">Sandbox</button></div></div>
+          <div class="setting"><span>Physics</span><div class="seg"><button id="ph-2" aria-pressed="true">2.0</button><button id="ph-c" aria-pressed="false">Classic</button></div></div>
           <div class="setting"><span>Flight assist</span><div class="seg"><button id="m-as-on" aria-pressed="true">On</button><button id="m-as-off" aria-pressed="false">Manual</button></div></div>
           <div class="setting"><span>Graphics</span><div class="seg"><button id="q-0" aria-pressed="false">Low</button><button id="q-1" aria-pressed="false">Medium</button><button id="q-2" aria-pressed="true">High</button></div></div>
           <div class="setting"><span>Steering sensitivity</span><input id="steer-sens" type="range" min="0.5" max="1.5" step="0.05" value="1"></div>
@@ -443,6 +543,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
           <li><span><kbd>X</kbd></span><span>Handbrake / drift</span></li>
           <li><span><kbd>F</kbd></span><span>Fan suction: Auto, Max, Off</span></li>
           <li><span><kbd>R</kbd></span><span>Reset car upright</span></li>
+          <li><span>HQ pad</span><span>Park on it to refill air and repair the car</span></li>
         </ul></div>
         <div><h3>Fly (Rocket trim)</h3><ul>
           <li><span><kbd>Space</kbd></span><span>Lift off / climb</span></li>
@@ -466,7 +567,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
           <li><span><kbd>M</kbd></span><span>Big map (click a zone to go)</span></li>
           <li><span><kbd>1</kbd>-<kbd>9</kbd></span><span>Teleport to zones</span></li>
           <li><span><kbd>N</kbd></span><span>Sound on / off</span></li>
-          <li><span><kbd>P</kbd><kbd>Esc</kbd></span><span>Pause menu</span></li>
+          <li><span><kbd>P</kbd><kbd>Esc</kbd></span><span>Pause menu (Garage, Physics 2.0 / Classic)</span></li>
         </ul></div>
       </div>
     </div>
