@@ -1,12 +1,12 @@
 {
-  "version": "1.1.4",
-  "file": "game-1.1.4.html",
-  "sha256": "973580d5b6d95fb03de214a4015e0892755028174c4d7aebf548305420248e16",
+  "version": "1.1.5",
+  "file": "game-1.1.5.html",
+  "sha256": "91faed1f0326dd48d95c31b7abcdbc61709e0f3a490a289924d8fba05ffd7161",
   "size": 1192241,
   "minShell": "1.1.0",
   "date": "2026-10-17",
   "notes": [
-    "Second test update",
-    "The pause menu (P) should now say 1.1.4"
+    "Live test: the game should have closed and shown this window",
+    "After updating, the pause menu (P) says 1.1.5"
   ]
 }
