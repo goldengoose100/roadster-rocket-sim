@@ -11,6 +11,19 @@ that actually runs out, and buildings that collapse block by block.
 
 ![Start screen](docs/start.png)
 
+## New in 2.0
+
+- **Garage**: a showroom with a turntable (start screen or pause menu). 5 upgrades with 3 levels each
+  (motor, tires, fan, thrust, air tank) that really change the physics, live stats measured with a test drive,
+  cosmetics (paint, wheels, rear wing, underglow, thruster smoke) and 3 saved builds.
+- **Credits** for 0-60 runs, the quarter mile, jumps, rings, flips and barrel rolls, the Loop of Death, the demo-ramp
+  flip, wall rides and destruction. Saved on your computer.
+- **Physics 2.0**: tires heat up, wear and change pressure; crashes crumple the panels where you hit, snap off parts
+  and can tear a wheel off (park on the HQ pad to repair); downforce turns into lift as the nose rises; wind gusts;
+  slipstream behind other cars; the air tank behaves like a real gas (it gets cold and thrust fades at the end);
+  explosions send out shockwaves at the speed of sound that shatter windows.
+- **Physics: 2.0 / Classic** in the pause menu. Classic is exactly the 1.x physics.
+
 | | |
 |---|---|
 | ![Loop of Death](docs/loop.png) | ![Wall ride](docs/wall-ride.png) |
@@ -46,6 +59,7 @@ You can also check manually from the pause menu (P).
 | G | | Flight assist on / manual |
 | Click or B | Fire rocket (after picking up a launcher) | same |
 | R | Reset car upright | same |
+| G (start screen) | Garage | |
 | V | Camera: chase, far, cockpit, cinematic, orbit | |
 | M | Big map (click to teleport) | |
 | 1-9 | Teleport to zones | |
@@ -57,7 +71,7 @@ Let go of every key while flying and the assist hovers in place.
 
 ## Map
 
-1. **Air Station HQ**: spawn; park on the glowing AIR pad to refill.
+1. **Air Station HQ**: spawn; park on the glowing AIR pad to refill air, repair the car and fit new tires.
 2. **Drag Strip**: 0-60 mph and 1/4 mile are timed automatically.
 3. **Demo Ramp 170°**: the reveal stunt; flip and hover down at the top.
 4. **Loop of Death**: follow the yellow line at 50+ mph.
@@ -83,6 +97,12 @@ node tools/package.mjs         # Windows app + zip in desktop/out/
 node tools/release.mjs "notes" # writes updates/game-<version>.html + updates/latest.json
 ```
 
-Tests: `node tools/physics-test.mjs`, `node tools/steer-test.mjs`, `node tools/hack-physics-test.mjs`,
-`OFFLINE=1 node tools/play-test.mjs out/` (Playwright), `xvfb-run node tools/updater-test.mjs out/`
-(needs `node tools/package.mjs --linux` first).
+Tests:
+- Headless: `node tools/physics-test.mjs`, `node tools/steer-test.mjs`, `node tools/hack-physics-test.mjs`,
+  `node tools/physics2-test.mjs`, `node tools/garage-test.mjs`. `PHYSICS=classic` in front of the first three must
+  print exactly the 1.1.5 numbers.
+- In the desktop app (`node tools/package.mjs --linux-only` first, then prefix with `APP=1 xvfb-run -a`):
+  `tools/play-test.mjs out/`, `tools/v2-test.mjs out/` (screenshots of every v2 feature),
+  `tools/hack-test.mjs out/` (`HACK_CODE=...`, or `HACK_UNLOCK=1` to skip the code screen).
+- Updater: `xvfb-run -a node tools/updater-test.mjs out/` (needs `node tools/package.mjs --linux`), and after
+  `release.mjs`: `xvfb-run -a node tools/release-check.mjs out/` (an app on the previous version installs the new one).

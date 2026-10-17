@@ -1,15 +1,38 @@
 // Shared Playwright setup: serves dist/, maps the three.js CDN to the local copy,
 // and collects console errors. Used by the test scripts in tools/.
-import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
+// APP=1 runs the same tests inside the packaged desktop app instead of a browser
+// (needs `node tools/package.mjs --linux-only` first; the linux build runs the same game file as the .exe).
+import { chromium, _electron } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname, extname } from 'node:path';
+import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const THREE_DIR = resolve(root, 'node_modules/three');
+export const APP_EXE = resolve(root, 'desktop/out/Roadster Rocket Sim-linux-x64/roadster-rocket-sim');
+
+async function openApp({ width, height, quality }) {
+  const home = mkdtempSync(join(tmpdir(), 'rrs-app-'));
+  const app = await _electron.launch({ executablePath: APP_EXE, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+    env: { ...process.env, XDG_CONFIG_HOME: home, ROADSTER_UPDATE_URL: 'http://localhost:9/' } });
+  const page = await app.firstWindow();
+  page.setDefaultTimeout(180000);
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
+  page.on('pageerror', (e) => errors.push('[pageerror] ' + e.message));
+  await app.evaluate(({ BrowserWindow }, [w, h]) => { const win = BrowserWindow.getAllWindows()[0]; win.unmaximize(); win.setContentSize(w, h); }, [width, height]);
+  if (quality !== undefined) {
+    await page.waitForFunction(() => window.__sim, null, { timeout: 180000 });
+    await page.evaluate((q) => localStorage.setItem('rrs.settings', JSON.stringify({ quality: q })), quality);
+    await page.reload();
+  }
+  return { page, app, errors, close: async () => { await app.close(); } };
+}
 
 export async function openSim({ width = 1440, height = 900, quality, touch = false } = {}) {
+  if (process.env.APP === '1') return openApp({ width, height, quality });
   const offline = process.env.OFFLINE === '1';
   const distDir = offline ? 'desktop/app' : 'dist';
   const server = createServer((req, res) => {

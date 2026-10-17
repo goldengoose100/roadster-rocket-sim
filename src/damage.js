@@ -6,14 +6,14 @@ import { raycast, makeHit } from './colliders.js';
 
 export const DMG = {
   vth: 9,          // m/s impact speed before panels dent (~20 mph)
-  vthBottom: 13,   // underbody is built for hard landings
+  vthBottom: 16,   // underbody + long-travel suspension are built for hard landings (~13 m drop)
   scale: 22,       // m/s above the threshold for a full-strength hit
-  wheelLand: 14,   // m/s vertical wheel landing speed before the suspension bends
+  wheelLand: 16,   // m/s vertical wheel landing speed before the suspension bends
 };
 // car-local reference points (+x = left side, +y = up, +z = forward, origin = centre of mass)
 const PARTS = {
   mirrorL: [0.95, 0.49, 0.8], mirrorR: [-0.95, 0.49, 0.8], spoiler: [0, 0.42, -1.95],
-  headL: [0.62, 0.05, 1.95], headR: [-0.62, 0.05, 1.95], tail: [0, 0.31, -2.2],
+  headL: [0.62, 0.05, 1.95], headR: [-0.62, 0.05, 1.95], tail: [0, 0.31, -2.2], splitter: [0, -0.29, 2.12],
 };
 const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 
@@ -23,7 +23,7 @@ export class DamageState {
     this.zones = { front: 0, rear: 0, left: 0, right: 0, top: 0, bottom: 0 };
     this.frame = 0; this.frameSide = 1;
     this.tankLeak = 0;
-    this.parts = { mirrorL: true, mirrorR: true, spoiler: true, headL: true, headR: true, tail: true };
+    this.parts = { mirrorL: true, mirrorR: true, spoiler: true, headL: true, headR: true, tail: true, splitter: true };
     this.hits = 0;
   }
   // how much of the fan's downforce still works (skirts and underbody)
@@ -33,9 +33,9 @@ export class DamageState {
   toe(i, w) { return w.bend * 0.05 * (i % 2 ? -1 : 1) + this.frame * 0.02 * this.frameSide; }
   // 0..1 overall condition for the HUD / garage
   condition(v) {
-    const z = this.zones;
-    let d = (z.front + z.rear + z.left + z.right + z.top + z.bottom) / 6 * 0.6 + this.frame * 0.15 + this.tankLeak * 0.05;
-    for (const w of v.wheels) d += (w.broken ? 1 : w.bend * 0.5) * 0.05;
+    const z = this.zones, all = [z.front, z.rear, z.left, z.right, z.top, z.bottom];
+    let d = Math.max(...all) * 0.3 + all.reduce((a, b) => a + b, 0) / 6 * 0.3 + this.frame * 0.15 + this.tankLeak * 0.05;
+    for (const w of v.wheels) d += (w.broken ? 1 : w.bend * 0.5) * 0.06;
     return Math.max(0, 1 - d);
   }
   isDamaged(v) { return this.hits > 0 || v.wheels.some(w => w.broken || w.bend > 0 || w.flat > 0); }
@@ -83,7 +83,8 @@ export class DamageState {
       if (!this.parts[id]) continue;
       const p = PARTS[id];
       const d = Math.hypot(lp.x - p[0], lp.y - p[1], lp.z - p[2]);
-      const lim = id === 'spoiler' ? (z.rear > 0.55 || (d < 0.7 && sev > 0.3)) : id === 'tail' ? (z.rear > 0.45 && d < 1.2) : id.startsWith('head') ? (d < 0.8 && sev > 0.25) : (d < 0.7 && sev > 0.15);
+      const lim = id === 'spoiler' ? (z.rear > 0.55 || (d < 0.7 && sev > 0.3)) : id === 'tail' ? (z.rear > 0.45 && d < 1.2)
+        : id === 'splitter' ? z.front > 0.3 : id.startsWith('head') ? (d < 0.8 && sev > 0.25) : (d < 0.7 && sev > 0.15);
       if (lim) { this.parts[id] = false; events.push({ type: 'part', id }); }
     }
   }
@@ -98,7 +99,8 @@ export class DamageState {
 }
 
 // ---------- visuals: crumple the body mesh where it was hit ----------
-const hash = (i) => { const s = Math.sin(i * 12.9898) * 43758.5453; return s - Math.floor(s); };
+// creased-metal pattern: smooth in space so panels fold instead of looking like crumpled foil
+const crease = (x, y, z) => 0.7 + 0.3 * Math.sin(x * 7.3 + y * 4.1) * Math.sin(z * 6.7 - x * 3.3 + y * 5.9);
 export class CarDamageVisual {
   constructor(model) {
     this.model = model;
@@ -111,7 +113,7 @@ export class CarDamageVisual {
   }
   // push the surface in along n (local) around point p
   dent(p, n, sev) {
-    const R = 0.45 + sev * 0.55, R2 = R * R, depth = 0.05 + sev * 0.17;
+    const R = 0.5 + sev * 0.55, R2 = R * R, depth = 0.04 + sev * 0.13;
     for (const M of this.meshes) {
       const a = M.pos.array, c = M.col && M.col.array;
       for (let i = 0, k = 0; k < a.length; i++, k += 3) {
@@ -119,11 +121,11 @@ export class CarDamageVisual {
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 > R2) continue;
         const f = 1 - d2 / R2, fall = f * f;
-        const amt = depth * fall * (0.65 + 0.6 * hash(i));
+        const amt = depth * fall * crease(M.p0[k], M.p0[k + 1], M.p0[k + 2]);
         a[k] += n.x * amt; a[k + 1] += n.y * amt; a[k + 2] += n.z * amt;
-        // never crush more than 0.32 m from the original shape
+        // never crush more than 0.28 m from the original shape
         const ox = a[k] - M.p0[k], oy = a[k + 1] - M.p0[k + 1], oz = a[k + 2] - M.p0[k + 2], ol = Math.hypot(ox, oy, oz);
-        if (ol > 0.32) { const s = 0.32 / ol; a[k] = M.p0[k] + ox * s; a[k + 1] = M.p0[k + 1] + oy * s; a[k + 2] = M.p0[k + 2] + oz * s; }
+        if (ol > 0.28) { const s = 0.28 / ol; a[k] = M.p0[k] + ox * s; a[k + 1] = M.p0[k + 1] + oy * s; a[k + 2] = M.p0[k + 2] + oz * s; }
         if (c) { const dk = 1 - 0.35 * fall * Math.min(1, sev * 1.5); c[k] *= dk; c[k + 1] *= dk; c[k + 2] *= dk; }
       }
       M.pos.needsUpdate = true; if (M.col) M.col.needsUpdate = true; M.dirty = true;

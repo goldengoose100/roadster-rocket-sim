@@ -472,15 +472,16 @@ async function boot(hotData = {}) {
     G.garageFrom = G.state;
     if (G.state === 'start') show('start', false);
     setOverlay('garage');
+    show('hud', false); show('cine', false);
     showroom.open(model);
     garageUI.open();
-    $('g-done').focus();
+    document.querySelector('.gpanel').scrollTop = 0;
   };
   const closeGarage = () => {
     garageUI.close();
     showroom.close(scene);
     applyTrim(); applyLook();
-    if (G.garageFrom === 'start') { show('start', true); updateStartCredits(); }
+    if (G.garageFrom === 'start') { show('start', true); updateStartCredits(); } else show('hud', true);
     if (renderPass) { renderPass.scene = scene; renderPass.camera = camera; }
   };
   const updateStartCredits = () => { $('start-cr').textContent = profile.cheats.unlimited ? 'unlimited credits' : `${Math.round(profile.credits).toLocaleString('en-US')} credits`; };
@@ -548,7 +549,7 @@ async function boot(hotData = {}) {
     const off = camera.position.clone().sub(vehicle.pos);
     G.crashCam = { t: 0, prev: G.timeScale, yaw: Math.atan2(off.x, off.z) };
     G.timeScale = Math.min(G.timeScale, 0.2);
-    show('cine', true);
+    show('cine', true); show('hud', false);
   };
   const updateCrashCam = (dt) => {
     const C = G.crashCam;
@@ -558,7 +559,7 @@ async function boot(hotData = {}) {
     camera.position.set(p.x + Math.sin(a) * r, Math.max(heightAt(p.x, p.z) + 0.6, p.y + 1.1 + C.t * 0.25), p.z + Math.cos(a) * r);
     camera.up.set(0, 1, 0); camera.lookAt(p.x, p.y + 0.3, p.z);
     camera.fov = 48; camera.updateProjectionMatrix();
-    if (C.t > 3) { G.timeScale = C.prev; G.crashCam = null; show('cine', false); rig.snap(); }
+    if (C.t > 3) { G.timeScale = C.prev; G.crashCam = null; show('cine', false); show('hud', G.state === 'play' && G.overlay !== 'garage'); rig.snap(); }
   };
   let crashToastT = -10;
   const handleCarEvents = () => {
@@ -594,12 +595,13 @@ async function boot(hotData = {}) {
         if (G.state === 'play') hud.toast('A wheel broke off! Repair on the HQ pad (press 1, then park on the pad)', 'warn', 4200);
       } else if (e.type === 'part') {
         model.broken[e.id] = true; model.refreshParts();
-        if (e.id === 'mirrorL' || e.id === 'mirrorR' || e.id === 'spoiler') {
-          const src = e.id === 'spoiler' ? model.wings[model.look.wing] : model.mirrors[e.id === 'mirrorL' ? 0 : 1];
+        if (e.id === 'mirrorL' || e.id === 'mirrorR' || e.id === 'spoiler' || e.id === 'splitter') {
+          const src = e.id === 'spoiler' ? model.wings[model.look.wing] : e.id === 'splitter' ? model.splitter : model.mirrors[e.id === 'mirrorL' ? 0 : 1];
           const p = new THREE.Vector3(); src.updateWorldMatrix(true, true);
           new THREE.Box3().setFromObject(src).getCenter(p);
-          const half = e.id === 'spoiler' ? new THREE.Vector3(0.6, 0.02, 0.14) : new THREE.Vector3(0.08, 0.04, 0.05);
-          const b = destruction.spawnFragment(p, vehicle.quat, half, e.id === 'spoiler' ? 8 : 2, e.id === 'spoiler' && model.look.wing !== 'duck' ? new THREE.Color('#16181b') : paintColor());
+          const big = e.id === 'spoiler' || e.id === 'splitter';
+          const half = big ? new THREE.Vector3(0.6, 0.02, 0.13) : new THREE.Vector3(0.08, 0.04, 0.05);
+          const b = destruction.spawnFragment(p, vehicle.quat, half, big ? 8 : 2, e.id === 'splitter' || (e.id === 'spoiler' && model.look.wing !== 'duck') ? new THREE.Color('#16181b') : paintColor());
           if (b) { b.vel.copy(vehicle.vel).multiplyScalar(0.7).add(new THREE.Vector3(0, 3, 0)); b.angVel.set(6, 4, 8); }
         }
       } else if (e.type === 'repaired') {
@@ -617,6 +619,13 @@ async function boot(hotData = {}) {
   let controls = input.controls();
   const _hit = makeHit();
   const stepOnce = () => {
+    // slipstream wakes: the pace car and cars thrown through the air
+    paceCar.update(DT);
+    if (vehicle.phys2 && G.steps % 8 === 0) {
+      env.wakes.length = 0;
+      if (paceCar.active) env.wakes.push(paceCar.wake);
+      for (const b of destruction.bodies) if (b.kind === 'target' && b.alive && !b.sleeping && b.vel.lengthSq() > 100) env.wakes.push({ pos: b.pos, vel: b.vel, hw: 1.2 });
+    }
     vehicle.step(DT, controls);
     controls.rollTap = 0;
     G.steps++;
@@ -634,7 +643,8 @@ async function boot(hotData = {}) {
     if (tm.state === 'armed' && sp > 0.3) tm.state = 'running';
     if (tm.state === 'running') {
       tm.t += DT; tm.dist += sp * DT;
-      if (!tm.got60 && sp >= 26.8224) {
+      if (!tm.got60 && sp >= 26.8224 && tm.t < 0.3) tm.state = 'idle'; // thrown to speed, not a launch
+      else if (!tm.got60 && sp >= 26.8224) {
         tm.got60 = true; tm.last060 = tm.t;
         const isBest = !tm.best060 || tm.t < tm.best060;
         if (isBest) { tm.best060 = tm.t; best[vehicle.trim.id] = Object.assign(best[vehicle.trim.id] || {}, { z60: tm.t }); store.set('best', best); }
@@ -1081,13 +1091,9 @@ async function boot(hotData = {}) {
           env.wind.update(sdt);
           const w = env.wind.sample(camera.position.x, camera.position.z, 2, _v);
           effectsWind.x = w.x * 0.85; effectsWind.z = w.z * 0.85;
-          // wakes for slipstream: the pace car and cars thrown through the air
-          env.wakes.length = 0;
-          paceCar.update(sdt, env.wakes);
-          for (const b of destruction.bodies) if (b.kind === 'target' && b.alive && !b.sleeping && b.vel.lengthSq() > 100) env.wakes.push({ pos: b.pos, vel: b.vel, hw: 1.2 });
           // camera shake when the shockwave reaches the camera
           for (let i = G.shakes.length - 1; i >= 0; i--) { const sh = G.shakes[i]; sh.t -= sdt; if (sh.t <= 0) { rig.trauma = Math.min(1, rig.trauma + sh.amt); G.shakes.splice(i, 1); } }
-        } else if (paceCar.active) paceCar.update(sdt, env.wakes);
+        }
         G.acc += sdt;
         let n = 0;
         const t0 = performance.now();
@@ -1151,7 +1157,7 @@ async function boot(hotData = {}) {
       // render (the garage draws its own showroom instead of the world)
       if (inGarage) {
         showroom.update(dt, innerWidth, innerHeight, innerWidth > 760);
-        if (composer) { renderPass.scene = showroom.scene; renderPass.camera = showroom.camera; composer.render(); renderPass.scene = scene; renderPass.camera = camera; }
+        if (composer) { renderPass.scene = showroom.scene; renderPass.camera = showroom.camera; bloom.strength = 0.22; composer.render(); bloom.strength = 0.5; renderPass.scene = scene; renderPass.camera = camera; }
         else renderer.render(showroom.scene, showroom.camera);
       } else if (composer) composer.render(); else renderer.render(scene, camera);
       // fps monitor + automatic quality drop

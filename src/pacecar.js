@@ -14,6 +14,7 @@ export class PaceCar {
     this.scene = scene; this.active = false; this.group = null;
     this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.dir = new THREE.Vector3();
     this.speed = 0; this.target = 50; this.t = 0;
+    this.wake = { pos: this.pos, vel: this.vel, hw: 1.0 };
   }
   build() {
     this.mat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { time: { value: 0 }, col: { value: new THREE.Color('#5fe4ff') } } });
@@ -37,7 +38,8 @@ export class PaceCar {
     this.scene.add(this.group);
   }
   despawn() { this.active = false; if (this.group) this.scene.remove(this.group); }
-  update(dt, wakes) {
+  // called every physics step so it stays in sync with the car
+  update(dt) {
     if (!this.active) return;
     this.t += dt;
     this.speed += Math.max(-8 * dt, Math.min(7 * dt, this.target - this.speed));
@@ -48,7 +50,6 @@ export class PaceCar {
     this.vel.copy(this.dir).multiplyScalar(this.speed);
     this.group.position.copy(this.pos);
     this.mat.uniforms.time.value = this.t;
-    wakes.push({ pos: this.pos, vel: this.vel, hw: 1.0 });
     if (this.t > 90 || Math.hypot(this.pos.x, this.pos.z) > 1700) this.despawn();
   }
 }

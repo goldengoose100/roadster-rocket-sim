@@ -281,7 +281,8 @@ export function buildCar(paint) {
   under.position.set(0, GROUND + 0.17, -0.05);
   group.add(under);
   // front splitter
-  const split = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.025, 0.25), mats.carbon);
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.025, 0.25), mats.carbon);
+  const split = splitter;
   split.position.set(0, GROUND + 0.16, 2.12);
   group.add(split);
 
@@ -462,7 +463,7 @@ export function buildCar(paint) {
   group.traverse(o => { if (o.isMesh && o !== canopy) o.castShadow = o.castShadow || false; });
   const glass0 = { color: mats.glass.color.clone(), roughness: mats.glass.roughness };
   const model = {
-    group, mats, wheels: wheelObjs, nozzles, spoiler, canopy, underglow, headlights, body, mirrors, heads, tail, wings,
+    group, mats, wheels: wheelObjs, nozzles, spoiler, canopy, underglow, headlights, body, mirrors, heads, tail, wings, splitter,
     launcher: { group: launcher, yaw: yawG, pitch: pitchG, muzzles },
     look: { wheels: 'aero', wing: 'duck' },
     lights: 0,           // headlight level from the time of day (0 day .. 1 night)
@@ -478,12 +479,13 @@ export function buildCar(paint) {
     refreshParts() {
       const b = model.broken;
       for (const k in wings) wings[k].visible = k === model.look.wing && !b.spoiler;
-      mirrors[0].visible = !b.mirrorL; mirrors[1].visible = !b.mirrorR;
+      mirrors[0].visible = !b.mirrorL; mirrors[1].visible = !b.mirrorR; splitter.visible = !b.splitter;
       model.updateLights();
     },
     updateLights() {
       const b = model.broken, on = model.lights ? 6 : 3.2;
       mats.headL.emissiveIntensity = b.headL ? 0 : on; mats.headR.emissiveIntensity = b.headR ? 0 : on;
+      heads[0].visible = !b.headL; heads[1].visible = !b.headR;
       headlights[0].intensity = b.headL ? 0 : model.lights * 320; headlights[1].intensity = b.headR ? 0 : model.lights * 320;
     },
     // cracked canopy glass after a hard hit

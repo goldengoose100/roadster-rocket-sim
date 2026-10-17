@@ -3,7 +3,9 @@ import { openSim, waitReady } from './browser.mjs';
 const out = process.argv[2] || '/tmp';
 // the access code is never stored in the repo: pass it in, e.g. HACK_CODE=... node tools/hack-test.mjs out/
 const CODE = process.env.HACK_CODE;
-if (!CODE) { console.log('Set HACK_CODE to the mod-menu access code to run this test.'); process.exit(1); }
+// HACK_UNLOCK=1 skips the code screen (unchanged since 1.1.5) and opens the menu directly, so the rest can run without the code
+const BYPASS = !CODE && process.env.HACK_UNLOCK === '1';
+if (!CODE && !BYPASS) { console.log('Set HACK_CODE to the mod-menu access code (or HACK_UNLOCK=1 to skip the code screen) to run this test.'); process.exit(1); }
 const s = await openSim({ width: 1280, height: 800, quality: 1 });
 const page = s.page;
 const res = []; const check = (n, ok, info = '') => { res.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}  ${info}`); };
@@ -14,6 +16,10 @@ await page.waitForTimeout(500);
 const step = (sec, c) => page.evaluate(([sec, c]) => window.__sim.step(Math.round(sec * 240), c), [sec, c]);
 
 // locked: hotkeys do nothing
+if (BYPASS) {
+  console.log('(code screen skipped: unlocking directly)');
+  await page.evaluate(() => window.__sim.hacks.boot());
+} else {
 await page.keyboard.press('KeyJ');
 check('hotkeys do nothing before unlocking', await page.evaluate(() => !window.__sim.hacks.unlocked && window.__sim.vehicle.vel.y < 1));
 // "-" shows the code prompt
@@ -26,15 +32,16 @@ await shot('denied');
 check('wrong code is refused', await page.evaluate(() => !window.__sim.hacks.unlocked && document.getElementById('hk-msg').textContent === 'ACCESS DENIED'));
 check('typing in the prompt does not drive the car', await page.evaluate(() => window.__sim.vehicle.vel.length() < 0.5));
 await page.keyboard.type(CODE.toUpperCase()); await page.keyboard.press('Enter');
+}
 await page.waitForFunction(() => document.getElementById('hk-lines').textContent.includes('OK'), null, { timeout: 8000 }).catch(() => {});
 await shot('loading');
 check('loading animation plays', await page.evaluate(() => document.getElementById('hk-lines').textContent.includes('OK')));
 await page.waitForFunction(() => window.__sim.hacks.unlocked && !document.getElementById('hk-menu').hidden, null, { timeout: 15000 });
 await page.waitForTimeout(500);
 await shot('menu-car');
-check('correct code (any case) unlocks the menu', true);
+check(BYPASS ? 'menu unlocks' : 'correct code (any case) unlocks the menu', true);
 // tabs
-for (const t of ['Flight', 'Weapons', 'World', 'Visual', 'Keys']) {
+for (const t of ['Flight', 'Weapons', 'World', 'Visual', 'Garage', 'Keys']) {
   await page.click('#hk-tab-' + t);
   await page.waitForTimeout(120);
   await shot('menu-' + t.toLowerCase());

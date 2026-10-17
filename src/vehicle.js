@@ -307,7 +307,7 @@ export class Vehicle {
       if (P2 && !w.hadContact && !this.hack.noDamage) {
         _r.subVectors(_a, this.pos);
         const vIn = -_vp.crossVectors(this.angVel, _r).add(this.vel).dot(w.hit.normal);
-        if (vIn > 14) dmg.wheelLanding(this, i, vIn, this.events);
+        if (vIn > 16) dmg.wheelLanding(this, i, vIn, this.events);
         if (w.broken) { w.contact = false; continue; }
       }
       w.hadContact = true;

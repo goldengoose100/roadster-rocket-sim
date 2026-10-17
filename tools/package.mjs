@@ -1,6 +1,7 @@
 // Packages the offline game as a desktop app.
 //   node tools/package.mjs           -> desktop/out/Roadster Rocket Sim-win32-x64 (+ zip)
 //   node tools/package.mjs --linux   -> also a linux build (used for automated testing)
+//   node tools/package.mjs --linux-only -> just the linux build (quick test cycles)
 import { packager } from '@electron/packager';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, cpSync } from 'node:fs';
@@ -19,7 +20,7 @@ rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 for (const f of ['package.json', 'main.cjs', 'preload.cjs', 'updater.html', 'app']) cpSync(resolve(desk, f), resolve(stage, f), { recursive: true });
 
-const platforms = ['win32', ...(process.argv.includes('--linux') ? ['linux'] : [])];
+const platforms = process.argv.includes('--linux-only') ? ['linux'] : ['win32', ...(process.argv.includes('--linux') ? ['linux'] : [])];
 for (const platform of platforms) {
   const [dir] = await packager({
     dir: stage, out, platform, arch: 'x64', electronVersion: '33.2.1', overwrite: true,

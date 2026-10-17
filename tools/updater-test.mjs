@@ -31,6 +31,10 @@ const publish = (version, html, extra = {}) => {
   writeFileSync(resolve(srv, 'latest.json'), JSON.stringify({ version, file, sha256: sha, size: Buffer.byteLength(html), minShell: '1.1.0', notes: [`Test notes for ${version}`], ...extra }));
 };
 const marked = (v) => base.replace('<title>', `<meta name="test-build" content="${v}"><title>`);
+// test versions are just above whatever version is bundled in the app
+const BUNDLED = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+const [MA, MI, PA] = BUNDLED.split('.').map(Number);
+const V1 = `${MA}.${MI}.${PA + 1}`, V2 = `${MA}.${MI}.${PA + 2}`, V3 = `${MA}.${MI}.${PA + 3}`, VSHELL = `${MA + 1}.0.0`;
 
 async function launch(env = {}) {
   const app = await _electron.launch({ executablePath: exe, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
@@ -44,32 +48,32 @@ const ready = (win) => win.waitForFunction(() => window.__sim && document.getEle
 const version = (win) => win.evaluate(() => [window.desktop && window.desktop.gameVersion, document.querySelector('meta[name=test-build]')?.content || 'bundled']);
 
 // 1. update offered and installed
-publish('1.1.1', marked('1.1.1'));
+publish(V1, marked(V1));
 let { app, win } = await launch();
 await ready(win);
-check('starts on the bundled version', (await version(win)).join() === '1.1.0,bundled');
+check('starts on the bundled version', (await version(win)).join() === `${BUNDLED},bundled`, (await version(win)).join());
 await win.evaluate(() => localStorage.setItem('rrs.updater-test', 'kept'));
 await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
 const modal = await win.evaluate(() => ({ shown: !document.getElementById('upd').hidden, title: document.getElementById('upd-title').textContent, ver: document.getElementById('upd-ver').textContent, notes: document.getElementById('upd-notes').textContent }));
-check('update popup appears on launch', modal.shown && modal.notes.includes('1.1.1'), JSON.stringify(modal));
+check('update popup appears on launch', modal.shown && modal.notes.includes(V1), JSON.stringify(modal));
 await win.screenshot({ path: resolve(work, '..', 'u-popup.png') });
 await win.click('#upd-go');
 await win.waitForFunction(() => document.querySelector('meta[name=test-build]'), null, { timeout: 120000 }).catch(() => {});
 await ready(win);
-check('update installs and reloads into the new version', (await version(win)).join() === '1.1.1,1.1.1', (await version(win)).join());
+check('update installs and reloads into the new version', (await version(win)).join() === `${V1},${V1}`, (await version(win)).join());
 check('saved settings survive the update', await win.evaluate(() => localStorage.getItem('rrs.updater-test') === 'kept'));
 await app.close();
 
 // 2. restart keeps the new version, nothing offered
 ({ app, win } = await launch());
 await ready(win);
-check('restart stays on the installed update', (await version(win)).join() === '1.1.1,1.1.1');
+check('restart stays on the installed update', (await version(win)).join() === `${V1},${V1}`);
 await win.waitForTimeout(6000);
 check('no popup when already up to date', await win.evaluate(() => document.getElementById('upd').hidden));
 await app.close();
 
 // 3. broken update rolls back automatically
-publish('1.1.2', '<!doctype html><title>broken</title><p>this build never starts</p>');
+publish(V2, '<!doctype html><title>broken</title><p>this build never starts</p>');
 ({ app, win } = await launch({ ROADSTER_BOOT_TIMEOUT: '8000' }));
 await ready(win);
 await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});
@@ -78,7 +82,7 @@ await win.waitForTimeout(3000);
 await win.waitForFunction(() => window.__sim && document.getElementById('loading').hidden, null, { timeout: 120000 }).catch(() => {});
 const after = await version(win);
 const toast = await win.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes("didn't start")), null, { timeout: 20000 }).then(() => true).catch(() => false);
-check('broken update rolls back to the last working version', after.join() === '1.1.1,1.1.1' && toast, `${after.join()} toast=${toast}`);
+check('broken update rolls back to the last working version', after.join() === `${V1},${V1}` && toast, `${after.join()} toast=${toast}`);
 await app.close();
 ({ app, win } = await launch());
 await ready(win); await win.waitForTimeout(6000);
@@ -86,7 +90,7 @@ check('the broken version is not offered again', await win.evaluate(() => docume
 await app.close();
 
 // 4. corrupted download is refused
-publish('1.1.3', marked('1.1.3'));
+publish(V3, marked(V3));
 const man = JSON.parse(readFileSync(resolve(srv, 'latest.json'), 'utf8')); man.sha256 = '0'.repeat(64); writeFileSync(resolve(srv, 'latest.json'), JSON.stringify(man));
 ({ app, win } = await launch());
 await ready(win);
@@ -94,7 +98,7 @@ await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { 
 await win.click('#upd-go');
 await win.waitForFunction(() => document.getElementById('upd-status').textContent.includes('failed'), null, { timeout: 60000 }).catch(() => {});
 const st = await win.evaluate(() => document.getElementById('upd-status').textContent);
-check('corrupted download is refused, game keeps working', st.includes('corrupted') && (await version(win)).join() === '1.1.1,1.1.1', st);
+check('corrupted download is refused, game keeps working', st.includes('corrupted') && (await version(win)).join() === `${V1},${V1}`, st);
 await app.close();
 
 // 5. offline: silent start, manual check reports it
@@ -107,7 +111,7 @@ check('offline start is silent, manual check explains', silent && offlineToast);
 await app.close();
 
 // 6. shell change needs a full download
-publish('2.0.0', marked('2.0.0'), { minShell: '2.0.0' });
+publish(VSHELL, marked(VSHELL), { minShell: VSHELL });
 ({ app, win } = await launch());
 await ready(win);
 await win.waitForFunction(() => !document.getElementById('upd').hidden, null, { timeout: 60000 }).catch(() => {});

@@ -169,42 +169,41 @@ export class Showroom {
     this.camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
     this.angle = 0.6; this.spin = 0.22; this.zoom = 1; this.time = 0;
     const s = this.scene;
-    s.add(new THREE.HemisphereLight('#9fb6c8', '#1a1410', 0.5));
-    const key = new THREE.SpotLight('#fff3e6', 900, 40, 0.55, 0.6, 1.6);
+    s.add(new THREE.HemisphereLight('#c3d1dc', '#1a1410', 1.3));
+    const key = new THREE.SpotLight('#fff3e6', 45, 40, 0.7, 1, 1.6);
     key.position.set(5, 9, 6); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0004;
     s.add(key); s.add(key.target);
-    const rim = new THREE.SpotLight('#7fe3ff', 500, 40, 0.7, 0.7, 1.6); rim.position.set(-7, 5, -6); s.add(rim); s.add(rim.target);
-    const fill = new THREE.PointLight('#ffb47a', 30, 20, 2); fill.position.set(-4, 2, 5); s.add(fill);
+    const rim = new THREE.SpotLight('#7fe3ff', 22, 40, 0.7, 1, 1.6); rim.position.set(-7, 5, -6); s.add(rim); s.add(rim.target);
+    const fill = new THREE.PointLight('#ffb47a', 6, 20, 2); fill.position.set(-4, 2, 5); s.add(fill);
     // polished floor, turntable with a glowing edge, curved backdrop, light strips
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshStandardMaterial({ color: '#0d1014', roughness: 0.22, metalness: 0.7 }));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshStandardMaterial({ color: '#111418', roughness: 0.7, metalness: 0.1, envMapIntensity: 0.3 }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
     this.table = new THREE.Group();
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.5, 0.14, 72), new THREE.MeshStandardMaterial({ color: '#1b2026', roughness: 0.35, metalness: 0.8 }));
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.5, 0.14, 72), new THREE.MeshStandardMaterial({ color: '#1e242b', roughness: 0.6, metalness: 0.25 }));
     disc.position.y = 0.07; disc.receiveShadow = true; this.table.add(disc);
-    const edge = new THREE.Mesh(new THREE.TorusGeometry(3.45, 0.025, 8, 96), new THREE.MeshStandardMaterial({ color: '#06141a', emissive: '#7fe3ff', emissiveIntensity: 2.6 }));
+    const edge = new THREE.Mesh(new THREE.TorusGeometry(3.45, 0.025, 8, 96), new THREE.MeshStandardMaterial({ color: '#06141a', emissive: '#7fe3ff', emissiveIntensity: 0.9 }));
     edge.rotation.x = Math.PI / 2; edge.position.y = 0.135; this.table.add(edge);
     const lines = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.23, 72), new THREE.MeshBasicMaterial({ color: '#2a3a46' }));
     lines.rotation.x = -Math.PI / 2; lines.position.y = 0.142; this.table.add(lines);
     s.add(this.table);
     const back = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 12, 64, 1, true, Math.PI * 0.55, Math.PI * 0.9), new THREE.MeshStandardMaterial({ color: '#0b0e12', roughness: 0.9, side: THREE.BackSide }));
     back.position.y = 6; s.add(back);
-    const stripMat = new THREE.MeshStandardMaterial({ color: '#05080a', emissive: '#dff4ff', emissiveIntensity: 2.2 });
+    const stripMat = new THREE.MeshStandardMaterial({ color: '#05080a', emissive: '#dff4ff', emissiveIntensity: 1.1 });
     for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(9, 0.06, 0.18), stripMat); b.position.set(0, 8.5, -6 + i * 3); s.add(b); }
-    for (const x of [-9, 9]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, 6, 0.08), new THREE.MeshStandardMaterial({ color: '#05080a', emissive: '#e0242f', emissiveIntensity: 2 })); b.position.set(x, 3, -10); s.add(b); }
     this.key = key;
   }
-  // studio reflections, built the first time the garage opens
+  // soft studio reflections (a smooth gradient dome, no hard panels), built the first time the garage opens
   buildEnv() {
     if (this.scene.environment) return;
     const pm = new THREE.PMREMGenerator(this.renderer);
     const es = new THREE.Scene();
-    es.background = new THREE.Color('#06080b');
-    const panel = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-    for (const [x, y, z, w, h] of [[0, 9, 0, 14, 1.2], [8, 4, -6, 1, 6], [-8, 4, -6, 1, 6], [0, 3, 10, 12, 2]]) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), panel); m.position.set(x, y, z); m.lookAt(0, 1, 0); es.add(m);
-    }
-    const gnd = new THREE.Mesh(new THREE.CircleGeometry(30, 32), new THREE.MeshBasicMaterial({ color: '#15181c' })); gnd.rotation.x = -Math.PI / 2; es.add(gnd);
-    this.scene.environment = pm.fromScene(es, 0.03).texture;
+    const g = new THREE.SphereGeometry(50, 32, 16);
+    const col = [], top = new THREE.Color('#4b5866'), mid = new THREE.Color('#1a2028'), low = new THREE.Color('#07090b'), c = new THREE.Color();
+    const pos = g.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 50; c.copy(y > 0 ? mid : low).lerp(y > 0 ? top : low, Math.abs(y)); col.push(c.r, c.g, c.b); }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    es.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    this.scene.environment = pm.fromScene(es, 0.04).texture;
     pm.dispose();
   }
   open(model) {

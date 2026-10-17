@@ -3,7 +3,7 @@
 Each session builds one block, tests it (existing suites + new tests), and ships it through the updater
 (`node tools/release.mjs "notes"`, then push). Keep existing gameplay identical unless asked. See CLAUDE.md.
 
-## Session 1: Garage + credits
+## Session 1: Garage + credits (done in 2.0.0)
 - Showroom with a spinning turntable, opened from the start screen and the pause menu
 - 5 upgrades with 3 levels each: motor, tires, fan, thrust, air tank (real effect on physics + live stats)
 - Cosmetics: paint, wheel styles, rear wing, underglow, thruster smoke color
@@ -41,7 +41,7 @@ Each session builds one block, tests it (existing suites + new tests), and ships
 ## Session 7: New vehicles
 - Cybertruck (heavy, tough, smashes things) and Rocket Semi (tows a trailer, giant thrusters), each with its own physics
 
-## Session 8: Physics 2.0
+## Session 8: Physics 2.0 (2.0.0: tires, soft-body crashes + HQ repair, aero + slipstream + wind, gas physics, shockwaves; fracture, ropes and water/mud still to do)
 - Tire model: heat, wear, pressure; grip changes with temperature; visible smoke and wear
 - Soft-body crashes: panels crumple at the impact point, wheels can break off, frame bends; repair at HQ
 - Aerodynamics: downforce/lift vs angle and speed, slipstream behind cars, wind gusts
