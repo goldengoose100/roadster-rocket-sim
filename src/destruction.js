@@ -117,6 +117,7 @@ export class Destruction {
     this.stats = { destroyed: 0 };
     this.fragBodies = [];
     this.gravityScale = 1;
+    this.mapG = 1;   // map gravity (2.5)
     this.spare = { concrete: 300, brick: 300, wood: 120, crate: 400, metal: 50 };
     this.glass = new Glass(scene);
     this.shock = new Shockwaves(this);
@@ -437,7 +438,7 @@ export class Destruction {
       if (b.sleeping) continue;
       b.age += dt;
       // integrate
-      b.vel.y -= G * this.gravityScale * dt;
+      b.vel.y -= G * this.gravityScale * this.mapG * dt;
       b.vel.multiplyScalar(Math.exp(-0.04 * dt));
       b.angVel.multiplyScalar(Math.exp(-0.5 * dt));
       b.pos.addScaledVector(b.vel, dt);

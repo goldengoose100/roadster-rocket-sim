@@ -8,7 +8,9 @@ import { heightAt } from './terrain.js';
 import { queryBox } from './colliders.js';
 import { DOLL_TYPES } from './dolltypes.js';
 
-const SUB = 1 / 120, G = 9.81, ITER = 6;
+const SUB = 1 / 120, ITER = 6;
+let G = 9.81;
+export const setDollGravity = (k) => { G = 9.81 * k; };
 const UP = new THREE.Vector3(0, 1, 0);
 // standing pose for size 1 (feet at y = 0); x = the doll's left, z = the way it faces
 const TORSO = [[0, 1.45, 0], [0, 0.97, 0], [0.2, 1.4, 0], [-0.2, 1.4, 0], [0.1, 0.95, 0], [-0.1, 0.95, 0]];   // neck, pelvis, shL, shR, hipL, hipR
@@ -306,10 +308,10 @@ export class Ragdolls {
   stumpMat(g) { if (!this.stumpMats.has(g.stump)) this.stumpMats.set(g.stump, new THREE.MeshStandardMaterial({ color: g.stump, roughness: 0.5 })); return this.stumpMats.get(g.stump); }
   goreOf(type) { return GORE[type.gore === 'blood' && !this.blood ? 'stuffing' : type.gore] || GORE.stuffing; }
   // fill the Weapons Range (skips spots where a building stands)
-  populate() {
+  populate(spots = SPOTS) {
     const types = DOLL_TYPES.filter(t => t.id !== 'boss'), boss = DOLL_TYPES.find(t => t.id === 'boss');
     let k = 0;
-    for (const [x, z, tag] of SPOTS) {
+    for (const [x, z, tag] of spots) {
       if (queryBox(x - 1.4, z - 1.4, x + 1.4, z + 1.4).length) continue;
       const type = tag === 'boss' && boss ? boss : types[k++ % types.length];
       this.dolls.push(new Doll(this, type, x, z, (Math.random() - 0.5) * 0.6, true));

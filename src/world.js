@@ -94,6 +94,8 @@ export class World {
   }
 
   build() {
+    // another map (2.5): its own builder; the desert below is unchanged
+    if (this.map) { this.map.build(this); this.flushBatches(); return; }
     this.buildPaved();
     this.buildHQ();
     this.buildDragStrip();

@@ -91,6 +91,20 @@ const ROADS = [
 export const ROAD_SEGS = ROADS.map(([ax, az, bx, bz]) => ({ type: 'seg', ax, az, bx, bz, hw: 7 }));
 for (const r of ROAD_SEGS) addShape(r, true, 30);
 
+// ---------- other maps (2.5) ----------
+// useMap(def) switches the terrain to another map before buildHeights(). Without it, the desert is
+// built exactly as before.
+let MAP = null;
+const NOISE = { fbm, smooth };
+export function useMap(def) {
+  MAP = def;
+  FLAT_SHAPES.length = 0; PAVED_SHAPES.length = 0;
+  for (const s of def.flats || []) { const { paved = true, blend = 45, ...shape } = s; addShape(shape, paved, blend); }
+  for (const k of Object.keys(ZONES)) delete ZONES[k];
+  Object.assign(ZONES, def.zones || {});
+}
+export const currentMap = () => MAP;
+
 export const MESAS = [
   { x: -640, z: -600, r: 75, h: 55, name: 'Mesa A' },
   { x: -860, z: -470, r: 60, h: 85, name: 'Mesa B' },
@@ -142,7 +156,7 @@ export function buildHeights() {
     for (let i = 0; i < N; i++) {
       const x = -HALF + i * TERRAIN_RES;
       const m = flatMask(x, z);
-      H[j * N + i] = m === 0 ? 0 : naturalHeight(x, z) * m;
+      H[j * N + i] = m === 0 ? 0 : (MAP ? MAP.height(x, z, NOISE) : naturalHeight(x, z)) * m;
     }
   }
 }
@@ -171,6 +185,7 @@ export function normalAt(x, z, out) {
   return out;
 }
 export function isPaved(x, z) {
+  if (MAP) return MAP.paved(x, z);
   for (const s of PAVED_SHAPES) if (sdfShape(s, x, z) < 0) return true;
   return false;
 }
@@ -230,7 +245,7 @@ function terrainPatch(i0, i1, j0, j1, step, drop, skip) {
     const x = -HALF + i * TERRAIN_RES, z = -HALF + j * TERRAIN_RES, h = H[j * N + i];
     pos[k * 3] = x; pos[k * 3 + 1] = h - drop; pos[k * 3 + 2] = z;
     uv[k * 2] = x / 9; uv[k * 2 + 1] = z / 9;
-    terrainColor(x, z, h, c, nrm, cols);
+    if (MAP) { normalAt(x + 0.1, z + 0.2, nrm); MAP.color(x, z, h, c, nrm, flatMask(x, z)); } else terrainColor(x, z, h, c, nrm, cols);
     col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
   }
   const idx = [];
@@ -276,7 +291,8 @@ export function buildMapImage(size = 512) {
     normalAt(x, z, nrm);
     const shade = Math.max(0.35, Math.min(1.2, 0.75 + (nrm.x * -0.6 + nrm.z * -0.5) * 2.2));
     let r = 196, gg = 168, b = 124;
-    if (h > 20) { const t = Math.min(1, (h - 20) / 80); r = 196 - 60 * t; gg = 168 - 80 * t; b = 124 - 60 * t; }
+    if (MAP) [r, gg, b] = MAP.mapColor(x, z, h);
+    else if (h > 20) { const t = Math.min(1, (h - 20) / 80); r = 196 - 60 * t; gg = 168 - 80 * t; b = 124 - 60 * t; }
     if (isPaved(x, z)) { r = 70; gg = 72; b = 78; }
     const k = (py * size + px) * 4;
     img.data[k] = r * shade; img.data[k + 1] = gg * shade; img.data[k + 2] = b * shade; img.data[k + 3] = 255;

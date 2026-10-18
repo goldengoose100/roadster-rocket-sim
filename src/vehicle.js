@@ -62,6 +62,7 @@ export class Vehicle {
     this.steerIn = 0;
     this.steerSens = 1;
     this.esc = true;
+    this.mapG = 1;   // map gravity (2.5)
     this.hack = { grip: 1, power: 1, topSpeed: 1, thrust: 1, gravity: 1, infiniteAir: false, noFlip: false, stickyFan: false, ghost: false, rollAnyTrim: false, scale: 1, noDamage: false, noTireHeat: false };
     // garage upgrades (1 = stock); thrust and air tank upgrades come in through the trim numbers
     this.tune = { motor: 1, vmax: 1, grip: 1, fan: 1, heat: 1, wear: 1 };
@@ -236,7 +237,7 @@ export class Vehicle {
     this.up.set(0, 1, 0).applyQuaternion(q);
     this.left.set(1, 0, 0).applyQuaternion(q);
     const m = this.mass;
-    const g = G * this.hack.gravity;
+    const g = G * this.hack.gravity * this.mapG;   // mapG: the Moon is 0.165 (1 on Earth, exact)
     this.g = g;
     if (this.hack.ghost) { this.ghostStep(dt, inp); return; }
     const P2 = this.phys2, dmg = this.damage, tune = this.tune;

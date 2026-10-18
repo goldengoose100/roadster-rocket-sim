@@ -7,14 +7,17 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { buildHeights, buildTerrainMesh, buildMapImage, heightAt, ZONES } from './terrain.js';
+import { buildHeights, buildTerrainMesh, buildMapImage, heightAt, ZONES, useMap } from './terrain.js';
 import { raycast, makeHit, groundBelow } from './colliders.js';
 import { Vehicle } from './vehicle.js';
 import { buildCar } from './carModel.js';
 import { World, makeSedan, makeSemi } from './world.js';
 import { Hacks } from './hacks.js';
 import { Luck } from './luck.js';
-import { Ragdolls } from './ragdoll.js';
+import { Ragdolls, setDollGravity } from './ragdoll.js';
+import { MAPS } from './maps/index.js';
+import { applyMapEnv } from './mapenv.js';
+import { MapPicker } from './mappicker.js';
 import { Destruction } from './destruction.js';
 import { Effects } from './effects.js';
 import { Weapons, WEAPON_LIST } from './weapons.js';
@@ -48,7 +51,7 @@ async function boot(hotData = {}) {
   window.__booted = true;
   try { await Promise.race([document.fonts.load('800 40px "Barlow Condensed"'), new Promise(r => setTimeout(r, 1500))]); } catch (_) { /* fonts optional */ }
 
-  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1, physics: '2', blood: true }, store.get('settings', {}), hotData.settings || {});
+  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1, physics: '2', blood: true, map: 'desert' }, store.get('settings', {}), hotData.settings || {});
   const profile = new Profile(store);
   // older saves kept the paint in settings
   if (!store.get('garage', null) && settings.paint) profile.d.setup.paint = settings.paint;
@@ -130,7 +133,10 @@ async function boot(hotData = {}) {
   rebuildEnv();
 
   // ---------- world ----------
-  await progress('Shaping 16 km² of terrain', 0.18);
+  // which map (2.5): the desert unless the player picked another one on the start screen
+  const MAP = MAPS[settings.map] || null;
+  if (MAP) useMap(MAP);
+  await progress(MAP ? `Landing on ${MAP.name}` : 'Shaping 16 km² of terrain', 0.18);
   buildHeights();
   await progress('Paving roads', 0.35);
   const terrain = buildTerrainMesh();
@@ -138,7 +144,9 @@ async function boot(hotData = {}) {
   await progress('Building ramps, loop and launch tower', 0.5);
   const destruction = new Destruction(scene);
   const world = new World(scene, destruction);
+  world.map = MAP;
   world.build();
+  if (MAP) world.teleports.sort((a, b) => a.key - b.key);   // spawn = key 1 (the HQ) on the new maps
   await progress('Stacking destructible buildings', 0.7);
   destruction.finalize();
   const mapImg = buildMapImage(512);
@@ -152,6 +160,8 @@ async function boot(hotData = {}) {
   model.spoiler.userData.y0 = model.spoiler.position.y;
   scene.add(model.group);
   const vehicle = new Vehicle();
+  const mapG = (MAP && MAP.env && MAP.env.gravity) || 1;   // the Moon: 0.165
+  vehicle.mapG = mapG; destruction.mapG = mapG; setDollGravity(mapG);
   vehicle.phys2 = settings.physics !== 'classic';
   vehicle.tune = profile.tune();
   vehicle.setTrim(profile.effectiveTrim(TRIMS[settings.trim] || TRIMS.rocket));
@@ -556,7 +566,7 @@ async function boot(hotData = {}) {
   const rewards = new Rewards(profile, (text, cr) => { hud.toast(`${text} · +${cr} CR`, 'good', 2600); sound.ring(); });
   // ragdoll target dummies in the Weapons Range (2.4)
   const ragdolls = new Ragdolls(scene, effects, { blood: settings.blood !== false });
-  ragdolls.populate();
+  ragdolls.populate(...(MAP ? [MAP.dollSpots || []] : []));
   ragdolls.onReward = (text, cr) => { const got = profile.earn(cr); if (got) { hud.toast(`${text} · +${got} CR`, 'good', 2600); sound.ring(); } };
   destruction.extraHit = (p, r) => ragdolls.hit(p, r);
   const setBlood = (on) => { settings.blood = on; saveSettings(); ragdolls.setBlood(on); $('bl-on').setAttribute('aria-pressed', String(on)); $('bl-off').setAttribute('aria-pressed', String(!on)); };
@@ -1125,6 +1135,17 @@ async function boot(hotData = {}) {
     };
   }
 
+  // ---------- map look (sky, fog, stars, Earth) and the map picker (2.5) ----------
+  let mapEnv = null;
+  if (MAP && MAP.env) { try { mapEnv = applyMapEnv(MAP.env, { THREE, scene, camera, renderer, fog, sky, skyMat, sun, hemi, setTimeOfDay }); } catch (e) { console.warn('map look', e); } }
+  try {
+    new MapPicker({
+      maps: [{ id: 'desert', name: 'Desert Test Site', desc: 'The original: ramps, loop, canyon, weapons range', col: '#ffb547' }, ...Object.values(MAPS).map(m => ({ id: m.id, name: m.name, desc: m.desc, col: m.col }))],
+      current: MAP ? MAP.id : 'desert',
+      onPick: (id) => { settings.map = id; saveSettings(); setTimeout(() => location.reload(), 150); },
+    });
+  } catch (e) { console.warn('map picker', e); }
+
   // ---------- main loop ----------
   applyTrim(); applyLook();
   applyQuality();
@@ -1197,6 +1218,7 @@ async function boot(hotData = {}) {
       if (co) { camera.position.set(...co.pos); camera.up.set(0, 1, 0); camera.lookAt(...co.look); camera.fov = co.fov || 40; camera.updateProjectionMatrix(); }
       if (controls.boost && vehicle.rear.length && vehicle.thrustN > 1000) rig.fovKick = Math.min(rig.fovKick + dt * 30, 9);
       sky.position.copy(camera.position);
+      if (mapEnv) mapEnv.update(dt, camera);
       // shadow camera follows the car (snapped to texels to avoid shimmer)
       const tx = Math.round(vehicle.pos.x / 2) * 2, tz = Math.round(vehicle.pos.z / 2) * 2;
       sun.target.position.set(tx, vehicle.pos.y, tz);
