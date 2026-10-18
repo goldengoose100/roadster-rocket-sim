@@ -98,8 +98,8 @@ export function build() {
   mesh(g, [
     put(new THREE.CapsuleGeometry(0.052, 1.5, 4, 12), 0, 1.47, -2.2, 0, 0, Math.PI / 2),
     put(new THREE.CapsuleGeometry(0.07, 0.86, 4, 12), 0, -0.1, 1.86, 0, 0, Math.PI / 2),
-    put(new THREE.BoxGeometry(0.84, 0.04, 0.44), 0, SEAT_Y, -1.53),
-    put(new THREE.BoxGeometry(0.84, 0.36, 0.035), 0, SEAT_Y + 0.17, -1.3, -0.08),
+    put(new THREE.BoxGeometry(0.84, 0.04, 0.46), 0, SEAT_Y, -1.52),
+    put(new THREE.BoxGeometry(0.84, 0.36, 0.035), 0, SEAT_Y + 0.17, -1.26, -0.08),
   ], mat('#e3202b', 0.42));
 
   // ---- the shopping, bouncing around as one load ----
@@ -117,9 +117,9 @@ export function build() {
   white.push(put(new THREE.BoxGeometry(MW, MH, MW), MX, YB + MH / 2, MZ, 0, 0.35));
   white.push(put(new THREE.CylinderGeometry(MW / Math.sqrt(3), MW / Math.sqrt(3), MW, 3).rotateX(-Math.PI / 2).rotateY(Math.PI / 2),
     MX, YB + MH + 0.045, MZ, 0, 0.35, 0, 1, 0.6, 1));
-  white.push(put(new THREE.BoxGeometry(MW, 0.05, 0.02), MX, YB + MH + 0.115, MZ, 0, 0.35));
+  white.push(put(new THREE.BoxGeometry(MW, 0.05, 0.02), MX, YB + MH + 0.15, MZ, 0, 0.35));
   blue.push(put(new THREE.BoxGeometry(MW + 0.01, 0.13, MW + 0.01), MX, YB + MH * 0.55, MZ, 0, 0.35));
-  blue.push(put(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 10), MX - 0.02, YB + MH + 0.06, MZ - 0.06, 0.55, 0.35));
+  blue.push(put(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 10), MX - 0.021, YB + MH + 0.08, MZ - 0.056, -0.8));
   // apples, one stacked on the others, with stems and leaves
   const APPLES = [[0.22, -0.32], [0.42, -0.08], [0.1, -0.02], [0.4, -0.5]];
   const AR = 0.095;
@@ -137,11 +137,12 @@ export function build() {
   red.push(put(new THREE.BoxGeometry(0.43, 0.12, 0.15), CB[0] - 0.012, CB[1] + 0.15, CB[2], 0, 0.25, 0.1));
   // carrots in the front right corner: tips down, leafy tops up
   const carrots = [], leaves = [];
-  for (const [x, z, lean] of [[0.3, 1.3, 0.25], [0.42, 1.42, 0.1], [0.24, 1.5, -0.12]]) {
-    const L = 0.46, tx = x + 0.08 * Math.sin(lean), cy = YB + 0.02 + L / 2;
-    carrots.push(put(new THREE.ConeGeometry(0.055, L, 9), tx, cy, z, Math.PI + 0.25, 0, lean));
-    const topY = cy + L / 2 * Math.cos(0.25), topZ = z + L / 2 * Math.sin(0.25);
-    for (let k = -1; k <= 1; k++) leaves.push(put(new THREE.ConeGeometry(0.025, 0.32, 5), tx + 0.06 * k, topY + 0.14, topZ + 0.03, 0.3, 0, -0.35 * k));
+  for (const [x, z, lean] of [[0.3, 1.3, 0.25], [0.42, 1.42, 0.1], [0.22, 1.5, -0.15]]) {
+    const L = 0.46, cy = YB + 0.03 + L / 2;
+    // turned upside down and tipped back: the wide top end sits at centre + (sin, 0.97 cos, 0.25 cos) * L / 2
+    carrots.push(put(new THREE.ConeGeometry(0.055, L, 9), x, cy, z, Math.PI + 0.25, 0, lean));
+    const tx = x + Math.sin(lean) * L / 2, ty = cy + 0.969 * Math.cos(lean) * L / 2, tz = z + 0.247 * Math.cos(lean) * L / 2;
+    for (let k = -1; k <= 1; k++) leaves.push(put(new THREE.ConeGeometry(0.024, 0.3, 5), tx + 0.05 * k, ty + 0.13, tz + 0.03, 0.25, 0, -0.4 * k));
   }
   green.push(...leaves);
 
@@ -154,11 +155,10 @@ export function build() {
   mesh(load, carrots, mat('#ff8a1c', 0.55));
 
   // baguette poking out of the basket on its own pivot so it can wobble, with pale score marks
-  const bag = new THREE.Group();
-  bag.position.set(-0.35, YB + 0.06, 0.0);
-  load.add(bag);
-  const dir = new THREE.Vector3(-0.17, 0.9, 0.4).normalize();
-  bag.quaternion.setFromUnitVectors(UP, dir);
+  const lean = new THREE.Group(), bag = new THREE.Group();
+  lean.position.set(-0.35, YB + 0.06, 0.0);
+  lean.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-0.17, 0.9, 0.4).normalize());
+  load.add(lean); lean.add(bag);
   const BL = 1.15, BR = 0.075;
   mesh(bag, put(new THREE.CapsuleGeometry(BR, BL, 4, 12), 0, BL / 2 + BR, 0, 0, 0, 0, 1, 1, 0.9), mat('#d8913a', 0.75));
   const scores = [];
@@ -170,9 +170,9 @@ export function build() {
   duck.position.set(0, SEAT_Y + 0.02, -1.5);
   g.add(duck);
   mesh(duck, [
-    put(new THREE.SphereGeometry(0.2, 16, 12), 0, 0.15, 0.02, 0, 0, 0, 1, 0.78, 1.12),     // body
+    put(new THREE.SphereGeometry(0.2, 16, 12), 0, 0.15, 0, 0, 0, 0, 1, 0.78, 1),     // body
     put(new THREE.SphereGeometry(0.15, 14, 10), 0, 0.41, -0.1),                            // head
-    put(new THREE.ConeGeometry(0.07, 0.16, 8), 0, 0.25, 0.22, -0.9),                        // tail
+    put(new THREE.ConeGeometry(0.07, 0.16, 8), 0, 0.26, 0.15, 0.9),                        // tail
     put(new THREE.SphereGeometry(0.1, 8, 6), 0.17, 0.16, 0.04, 0, 0, 0, 0.35, 0.6, 1),     // wings
     put(new THREE.SphereGeometry(0.1, 8, 6), -0.17, 0.16, 0.04, 0, 0, 0, 0.35, 0.6, 1),
   ], mat('#ffd41f', 0.35));
