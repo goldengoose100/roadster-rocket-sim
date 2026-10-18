@@ -34,7 +34,7 @@ const LANDMARKS = [
   { cx: -150, cz: -50, h: 213 }, { cx: 150, cz: 50, h: 178 }, { cx: -250, cz: 250, h: 164 },
   { cx: 50, cz: 550, h: 199 }, { cx: 150, cz: 350, h: 157 }, { cx: 250, cz: -250, h: 189 }, { cx: -350, cz: -250, h: 150 },
 ];
-const MAX_BILLBOARDS = 26, MAX_HELIPADS = 30;
+const MAX_BILLBOARDS = 36, MAX_HELIPADS = 30;
 
 // ---------- deterministic random ----------
 function mulberry(a) {
@@ -145,7 +145,7 @@ function mergeAll(geos) {
 
 export function build(world) {
   const scene = world.scene;
-  const stats = { buildings: 0, landmarks: 0, colliders: 0, meshes: 0, billboards: 0, billboardAt: [], helipads: 0, antennas: 0, tanks: 0, blades: 0 };
+  const stats = { buildings: 0, landmarks: 0, colliders: 0, meshes: 0, billboards: 0, helipads: 0, antennas: 0, tanks: 0, blades: 0 };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const QI = new THREE.Quaternion();
   const collide = (cx, cy, cz, hx, hy, hz, surface = 'concrete') => {
@@ -344,7 +344,7 @@ export function build(world) {
     for (const s of [-1, 1]) { const e = new THREE.BoxGeometry(0.2, bh, 0.36); e.translate(s * (bw / 2 + 0.05), lift + bh / 2, 0); put(nm, place(e)); }
     const hx = fi.alongX ? bw / 2 + 0.15 : 0.2, hz = fi.alongX ? 0.2 : bw / 2 + 0.15;
     collide(x, y + (lift + bh + 0.2) / 2, z, hx, (lift + bh + 0.2) / 2, hz, 'metal');
-    stats.billboards++; stats.billboardAt.push([Math.round(x), Math.round(z), wd.word, face.tag, face.n.join(), x0, x1, z0, z1].join(" "));
+    stats.billboards++;
     return true;
   };
   const roofDetails = (r, faces, x0, x1, z0, z1, y, h) => {
@@ -354,7 +354,7 @@ export function build(world) {
       return;
     }
     let blocked = null;   // the roof half a billboard took
-    if (faces.length && h >= 18 && h <= 80 && stats.billboards < MAX_BILLBOARDS && r() < (faces[0].tag === 'res' ? 0.45 : 0.045)) {
+    if (faces.length && h >= 18 && h <= 80 && stats.billboards < MAX_BILLBOARDS && r() < (faces[0].tag === 'res' ? 0.25 : 0.065)) {
       if (billboard(r, faces[0], x0, x1, z0, z1, y)) blocked = faces[0].n;
     }
     const q = [[-1, -1], [1, -1], [-1, 1], [1, 1]].filter(([sx, sz]) => !blocked || (sx * blocked[0] + sz * blocked[1]) <= 0);
