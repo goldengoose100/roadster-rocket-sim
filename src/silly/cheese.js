@@ -14,7 +14,7 @@ export const info = { id: 'cheese', name: 'Cheese Wedge' };
 const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // side profile (z along the car, y up) before the bevel rounds every edge off by BEV
-const ZF = 2.2, ZB = -2.16, YB = -0.21, YT = 0.9, YTIP = -0.09, HALF = 0.72, BEV = 0.04;
+const ZF = 2.2, ZB = -2.16, YB = -0.21, YT = 0.9, YTIP = -0.09, HALF = 0.64, BEV = 0.04;
 const K = (YT - YTIP) / (ZF - ZB);                         // rise of the slope per metre
 const topY = z => YTIP + K * (z - ZB);
 const surfY = z => topY(z) + BEV * Math.sqrt(1 + K * K);   // the slope's surface after the bevel
@@ -90,7 +90,7 @@ function dimplesGeometry() {
     parts.push(one(r, slopeY, slopeN));
   }
   // on the tall front face (x, y, r): clear of where the googly eyes go
-  for (const [x, y, r] of [[-0.52, 0.0, 0.1], [0.5, 0.12, 0.13], [0.12, -0.06, 0.07], [-0.5, 0.76, 0.07], [0.56, 0.78, 0.06]]) {
+  for (const [x, y, r] of [[-0.46, 0.0, 0.1], [0.44, 0.12, 0.12], [0.12, -0.06, 0.07], [-0.5, 0.76, 0.07], [0.5, 0.78, 0.06]]) {
     at.set(x, y, ZF + BEV + 0.006);
     parts.push(one(r, frontY, frontN));
   }
@@ -164,7 +164,7 @@ export function build() {
     sph(0.05, 8, 6).scale(1, 0.6, 1.5).translate(-0.1, 0.02, 0.16), sph(0.05, 8, 6).scale(1, 0.6, 1.5).translate(0.1, 0.02, 0.16)]),
   pink, 0, 0, 0);
   // the crumb: a tiny cheese wedge of its own
-  const crumb = add(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 3), mat('#ffcf3a', 0.55), 0, 0.25, 0.25);
+  const crumb = add(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 3), new THREE.MeshStandardMaterial({ color: '#ffcf3a', roughness: 0.55, flatShading: true }), 0, 0.25, 0.25);
   crumb.rotation.set(Math.PI / 2, 0, 0.3);
   // whiskers: three a side, fanned out from the snout
   const wh = [];

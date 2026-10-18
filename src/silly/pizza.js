@@ -97,7 +97,7 @@ function crustGeometry() {
 // a cheese drip hanging down the side of the dough: a teardrop with a fat round end
 function dripGeometry(L, w) {
   const pts = [];
-  for (let k = 0; k <= 7; k++) {
+  for (let k = 7; k >= 0; k--) {   // bottom to top, so the faces point outwards
     const t = k / 7;
     const bulb = 0.75 - 0.15 * t + 0.4 * Math.exp(-(((t - 0.76) / 0.13) ** 2));
     const cap = t > 0.78 ? Math.sqrt(Math.max(0, 1 - ((t - 0.78) / 0.22) ** 2)) : 1;
