@@ -57,12 +57,14 @@ const DEFS = [
   { tab: 'Flight', id: 'jumpPower', label: 'Moon jump height [J]', type: 'slider', min: 5, max: 60, step: 5, def: 15, unit: ' m/s' },
   { tab: 'Weapons', id: 'alwaysLauncher', label: 'Launcher always equipped', type: 'toggle', def: false },
   { tab: 'Weapons', id: 'infiniteAmmo', label: 'Infinite rockets', type: 'toggle', def: false },
-  { tab: 'Weapons', id: 'rapidFire', label: 'Machine-gun fire rate', type: 'toggle', def: false },
-  { tab: 'Weapons', id: 'blast', label: 'Explosion size', type: 'slider', min: 1, max: 5, step: 0.25, def: 1, unit: '×' },
+  { tab: 'Weapons', id: 'rapidFire', label: 'Machine-gun fire rate (no recharge)', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'blast', label: 'Explosion size (all weapons)', type: 'slider', min: 1, max: 5, step: 0.25, def: 1, unit: '×' },
   { tab: 'Weapons', id: 'homing', label: 'Homing rockets', type: 'toggle', def: false },
   { tab: 'Weapons', id: 'cluster', label: 'Cluster rockets', type: 'toggle', def: false },
   { tab: 'Weapons', id: 'doNuke', label: 'Drop a nuke at the crosshair [K]', type: 'button', text: 'NUKE' },
   { tab: 'Weapons', id: 'doStrike', label: 'Airstrike at the crosshair [L]', type: 'button', text: 'CALL IN' },
+  { tab: 'Weapons', id: 'doLaser', label: 'Orbital laser at the crosshair', type: 'button', text: 'FIRE' },
+  { tab: 'Weapons', id: 'doHole', label: 'Black hole at the crosshair', type: 'button', text: 'OPEN' },
   { tab: 'World', id: 'timeScale', label: 'Game speed (bullet time [Y])', type: 'slider', min: 0.1, max: 2, step: 0.05, def: 1, unit: '×' },
   { tab: 'World', id: 'tod', label: 'Time of day', type: 'select', options: TOD, def: 'day' },
   { tab: 'World', id: 'spawnKind', label: 'Spawn at crosshair [U]', type: 'select', options: SPAWNS, def: 'crates', button: 'SPAWN' },
@@ -284,6 +286,8 @@ export class Hacks {
     switch (id) {
       case 'doNuke': a.nuke(aim); break;
       case 'doStrike': a.weapons.airstrike(aim); a.toast('Airstrike inbound', 'warn', 1500); break;
+      case 'doLaser': a.orbital(aim); break;
+      case 'doHole': a.blackHole(aim); break;
       case 'doSpawn': a.spawn(this.v.spawnKind, aim); break;
       case 'doDetonate': a.toast(`${a.destruction.detonateAll()} barrels armed`, 'warn', 1800); break;
       case 'doCollapse': a.toast(`${a.destruction.collapseAll()} blocks knocked loose`, 'warn', 1800); break;

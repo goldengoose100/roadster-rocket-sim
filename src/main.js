@@ -15,7 +15,7 @@ import { World, makeSedan, makeSemi } from './world.js';
 import { Hacks } from './hacks.js';
 import { Destruction } from './destruction.js';
 import { Effects } from './effects.js';
-import { Weapons } from './weapons.js';
+import { Weapons, MODE_HINTS } from './weapons.js';
 import { CameraRig, CAMERA_MODES } from './camera.js';
 import { HUD } from './hud.js';
 import { Input } from './input.js';
@@ -253,6 +253,7 @@ async function boot(hotData = {}) {
   const _tmp = new THREE.Vector3();
   destruction.onExplode = (pos, radius, power, kind) => {
     effects.explosion(pos, radius, power);
+    weapons.chain(pos, radius);
     const dist = camera.position.distanceTo(pos);
     _tmp.copy(pos).sub(camera.position).normalize();
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
@@ -284,7 +285,18 @@ async function boot(hotData = {}) {
   };
   destruction.glass.onShatter = (p, n) => sound.glass(camera.position.distanceTo(p), n);
   destruction.onImpact = (pos, speed) => { if (camera.position.distanceTo(pos) < 60) sound.impact(Math.min(8, speed * 0.6)); };
-  weapons.onFire = (p, kind) => { if (kind === 'rail') { sound.tone(180, 0.5, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 3000, 0.7, 0.4); rig.trauma = Math.min(1, rig.trauma + 0.3); rig.fovKick -= 4; } else { sound.launch(); rig.fovKick -= 1.5; } };
+  weapons.onFire = (p, kind) => {
+    if (kind === 'rail') { sound.tone(180, 0.5, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 3000, 0.7, 0.4); rig.trauma = Math.min(1, rig.trauma + 0.3); rig.fovKick -= 4; }
+    else if (kind === 'grapple') { sound.oneShot(sound.noise, 'bandpass', 2200, 0.35, 0.25, { sweep: 900 }); sound.click(); }
+    else if (kind === 'mine') sound.tone(220, 0.12, 0.12, 'square');
+    else if (kind === 'tractor') { sound.tone(330, 0.6, 0.1, 'sine'); sound.tone(495, 0.6, 0.08, 'sine', 0.05); }
+    else if (kind === 'throw') sound.whoosh();
+    else if (kind === 'emp') { sound.tone(90, 0.8, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 4000, 0.6, 0.6); rig.trauma = Math.min(1, rig.trauma + 0.25); }
+    else if (kind === 'laser') { sound.tone(1200, 1.0, 0.06, 'square'); sound.tone(70, 4.5, 0.2, 'sawtooth', 1.0); }
+    else if (kind === 'blackhole') { sound.tone(45, 4, 0.3, 'sine'); sound.oneShot(sound.brown, 'lowpass', 200, 0.8, 4, { sweep: 60 }); }
+    else { sound.launch(); rig.fovKick -= 1.5; }
+  };
+  weapons.onEmp = (p, r) => { if (paceCar.active && paceCar.pos.distanceTo(p) < r) paceCar.stall(5); };
   weapons.onPickup = () => {
     model.launcher.group.visible = true;
     sound.pickup();
@@ -493,6 +505,7 @@ async function boot(hotData = {}) {
   const spawnedRamps = [];
   const rebuild = () => {
     destruction.rebuild();
+    weapons.clearSpecials();
     for (const r of spawnedRamps) { r.alive = false; r.mesh.parent && r.mesh.parent.remove(r.mesh); }
     spawnedRamps.length = 0;
     for (const d of effects.decals) d.visible = false;
@@ -522,7 +535,7 @@ async function boot(hotData = {}) {
       if (code === 'Minus' || code === 'NumpadSubtract') continue; // handled instantly below
       if (hacks.key(code)) continue;
       if (code === 'KeyQ' || code === 'KeyE') { G.rollTap = code === 'KeyE' ? 1 : -1; continue; }
-      if (code === 'Tab' && weapons.equipped) { const m = weapons.toggleMode(); hud.toast(m === 'rail' ? 'Railgun · pierces buildings · click or B' : 'Rocket launcher', 'warn', 1500); continue; }
+      if ((code === 'Tab' || code === 'ShiftTab') && weapons.equipped) { const m = weapons.toggleMode(code === 'ShiftTab' ? -1 : 1); hud.showWheel(m); hud.toast(MODE_HINTS[m], 'warn', 2200); continue; }
       if (code === 'KeyV') hud.toast(CAMERA_MODES[rig.mode = (rig.mode + 1) % CAMERA_MODES.length] + ' camera', '', 1200), rig.snap();
       else if (code === 'KeyR') resetUpright();
       else if (code === 'KeyF') { const m = ['auto', 'max', 'off']; vehicle.fan.mode = m[(m.indexOf(vehicle.fan.mode) + 1) % 3]; hud.toast('Fan suction ' + vehicle.fan.mode.toUpperCase(), 'ice', 1400); }
@@ -628,6 +641,7 @@ async function boot(hotData = {}) {
       for (const b of destruction.bodies) if (b.kind === 'target' && b.alive && !b.sleeping && b.vel.lengthSq() > 100) env.wakes.push({ pos: b.pos, vel: b.vel, hw: 1.2 });
     }
     vehicle.step(DT, controls);
+    weapons.physStep(DT, vehicle);
     controls.rollTap = 0;
     G.steps++;
     // debris runs at 120 Hz, or 60 Hz while a lot of it is moving
@@ -1008,6 +1022,8 @@ async function boot(hotData = {}) {
     toast: (m, k, ms) => hud.toast(m, k, ms),
     setTimeOfDay, aimPoint, teleportTo, nuke, spawn: spawnThing, rebuild: () => rebuild(), setXray, setFreeCam, setPhoto, applyLook,
     profile, onCheats, repair: instantRepair,
+    orbital: (p) => { weapons.vehicle = vehicle; weapons.orbital(p); hud.toast('Orbital laser locked on', 'warn', 1500); },
+    blackHole: (p) => { weapons.vehicle = vehicle; weapons.blackHoleAt(p); hud.toast('Black hole opened', 'warn', 1500); },
   });
 
   // "-" opens the mod menu immediately (not on the next frame) so nothing typed leaks into the game
@@ -1083,9 +1099,12 @@ async function boot(hotData = {}) {
         controls.rollTap = G.rollTap; G.rollTap = 0;
         if (G.state === 'play') {
           // fire
-          const fire = input.clicks > 0 || controls.fire;
+          // the grapple and tractor beam toggle, so holding B only fires them once
+          const toggles = weapons.mode === 'grapple' || weapons.mode === 'tractor';
+          const fire = input.clicks > 0 || (controls.fire && !(toggles && G.fireHeld));
+          G.fireHeld = controls.fire;
           input.clicks = 0;
-          if (fire && weapons.equipped) weapons.tryFire(model, vehicle, G.aim);
+          if (fire && weapons.equipped && !weapons.tryFire(model, vehicle, G.aim) && weapons.mode === 'tractor') hud.toast('Tractor beam · nothing loose to grab there', '', 1200);
         }
         const sdt = dt * G.timeScale;
         if (vehicle.phys2) {

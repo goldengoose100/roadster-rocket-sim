@@ -11,7 +11,7 @@ export class Input {
       if (e.target && (e.target.tagName === 'INPUT' && e.target.type !== 'range')) return;
       if (block.has(e.code)) e.preventDefault();
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (!this.down.has(e.code)) this.pressed.push(e.code);
+      if (!this.down.has(e.code)) this.pressed.push(e.code === 'Tab' && e.shiftKey ? 'ShiftTab' : e.code);
       this.down.add(e.code);
     });
     window.addEventListener('keyup', (e) => { this.down.delete(e.code); });

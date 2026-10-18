@@ -3,9 +3,22 @@
 // panel damage on the car outline, real tank pressure and temperature, slipstream, leak and wind.
 import { MPH, KMH, PHYS } from './config.js';
 import { ZONES } from './terrain.js';
+import { MODES, MODE_NAMES } from './weapons.js';
 
 const $ = (id) => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
+
+// ammo line for the Tab weapons
+function specialText(w) {
+  const name = MODE_NAMES[w.mode].toUpperCase(), left = w.chargeLeft();
+  if (left > 0) return `${name} CHARGING ${Math.round((1 - left) * 100)}%`;
+  if (w.mode === 'grapple' && w.rope) return `GRAPPLE HOOKED · ${Math.round(w.rope.len)} m · FIRE TO LET GO`;
+  if (w.mode === 'tractor' && w.held) return 'TRACTOR BEAM HOLDING · FIRE TO THROW';
+  if (w.mode === 'mine') return `MINES ${w.mines.length}/8 PLACED · FIRE TO DROP`;
+  if (w.mode === 'laser' && w.laser) return 'ORBITAL LASER FIRING';
+  if (w.mode === 'blackhole' && w.hole) return 'BLACK HOLE ACTIVE';
+  return `${name} READY · TAB = NEXT`;
+}
 
 // thruster diagram positions (svg units, front = up)
 const DOT_POS = {
@@ -132,6 +145,24 @@ export class HUD {
     this.zoneTimer = 4.5;
   }
 
+  // weapon wheel: pops up for a moment when Tab changes weapon
+  showWheel(mode) {
+    const el = $('wheel');
+    if (!el) return;
+    if (!el.childElementCount) {
+      MODES.forEach((m, i) => {
+        const a = (i / MODES.length) * Math.PI * 2 - Math.PI / 2;
+        const b = document.createElement('span');
+        b.dataset.m = m; b.textContent = MODE_NAMES[m];
+        b.style.left = `calc(50% + ${Math.cos(a) * 118}px)`; b.style.top = `calc(50% + ${Math.sin(a) * 118}px)`;
+        el.appendChild(b);
+      });
+    }
+    for (const b of el.children) b.classList.toggle('on', b.dataset.m === mode);
+    el.hidden = false; el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
+    clearTimeout(this.wheelT);
+    this.wheelT = setTimeout(() => { el.hidden = true; }, 1400);
+  }
   flash(a) { this.el.flash.style.opacity = a; }
 
   update(dt, s) {
@@ -214,9 +245,11 @@ export class HUD {
     const am = this.el.ammo;
     am.hidden = !w.equipped;
     if (w.equipped) {
-      const key = w.mode === 'rail' ? 'rail' + Math.ceil(w.railCharge * 10) : w.ammo + '|' + (w.reload > 0);
-      if (am.dataset.k !== key && w.mode === 'rail') { am.dataset.k = key; am.textContent = w.railCharge > 0 ? `RAILGUN CHARGING ${Math.round((1 - w.railCharge / w.railTime) * 100)}%` : 'RAILGUN READY · TAB = ROCKETS'; }
-      else if (am.dataset.k !== key) {
+      if (w.mode !== 'rocket') {
+        const t = specialText(w);
+        if (am.dataset.k !== t) { am.dataset.k = t; am.textContent = t; }
+      } else if (am.dataset.k !== w.ammo + '|' + (w.reload > 0)) {
+        const key = w.ammo + '|' + (w.reload > 0);
         am.dataset.k = key;
         am.innerHTML = w.reload > 0 ? 'RELOADING' : 'ROCKETS ' + Array.from({ length: w.mag }, (_, i) => `<i class="${i < w.ammo ? '' : 'used'}"></i>`).join('');
       }
