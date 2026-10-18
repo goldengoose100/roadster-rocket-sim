@@ -57,8 +57,9 @@ function makeEarthTexture(THREE, W = 512, H = 256) {
       let r, g, b;
       if (e > 0.53) {
         const k = sstep(0.53, 0.7, e);
-        const dry = sstep(0.45, 0.65, fbm(px * 4 + 3, py * 4 - 9, pz * 4 + 5, 3)) * (1 - sstep(10, 40, Math.abs(alat - 24)) * 0.4 - 0.2) + (alat < 35 && alat > 15 ? 0.25 : 0);
-        const d = clamp(dry, 0, 1);
+        // brown deserts: patchy noise, more of it round 15-35 degrees, less near the poles
+        const patch = sstep(0.45, 0.65, fbm(px * 4 + 3, py * 4 - 9, pz * 4 + 5, 3));
+        const d = clamp(patch * 0.7 + (alat > 15 && alat < 35 ? 0.3 : 0) - (alat > 50 ? 0.3 : 0), 0, 1);
         r = 52 + (150 - 52) * d + 20 * k; g = 108 + (122 - 108) * d - 10 * k; b = 44 + (78 - 44) * d;
       } else {
         const coast = sstep(0.42, 0.53, e);
@@ -69,7 +70,7 @@ function makeEarthTexture(THREE, W = 512, H = 256) {
       r += (236 - r) * ice; g += (242 - g) * ice; b += (248 - b) * ice;
       // clouds
       const cn = fbm(px * 3.2 - 21, py * 5.5 + 2, pz * 3.2 + 13, 4);
-      const cloud = sstep(0.5, 0.72, cn) * 0.9;
+      const cloud = sstep(0.53, 0.75, cn) * 0.85;
       r += (240 - r) * cloud; g += (244 - g) * cloud; b += (250 - b) * cloud;
       const o = (j * W + i) * 4;
       data[o] = clamp(r, 0, 255); data[o + 1] = clamp(g, 0, 255); data[o + 2] = clamp(b, 0, 255); data[o + 3] = 255;

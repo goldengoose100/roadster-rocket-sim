@@ -46,6 +46,6 @@ export const ROADS = [
   [-90, 40, -330, 120],                        // base -> jump zone
   [60, 90, 230, 180],                          // base -> mega ramp
   [-70, -70, -470, -420],                      // base -> canyon
-  [90, 90, 440, 450],                          // base -> lander
+  [90, 50, 460, 160], [460, 160, 500, 410],    // base -> lander (around the Mega Ramp landing bowl)
   [0, 100, 0, 520],                            // base -> big crater
 ];

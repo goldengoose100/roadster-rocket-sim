@@ -248,7 +248,7 @@ export function color(x, z, h, out, nrm, fm) {
   const f = Number.isFinite(fm) ? fm : 1;
   const hh = Number.isFinite(h) ? h : 0;
   const mott = lfbm(x * 0.011 + 5.1, z * 0.011 + 8.7, 2);
-  const maria = sm(0.5, 0.64, lfbm(x * 0.0009 + 40.5, z * 0.0009 - 30.2, 3));
+  const maria = sm(0.47, 0.62, lfbm(x * 0.0009 + 40.5, z * 0.0009 - 30.2, 3));
   let v = 0.34 * (0.86 + 0.28 * mott);                    // grey regolith
   v += (0.15 * (0.9 + 0.2 * mott) - v) * maria;            // dark basalt maria
   v += (0.5 - v) * sm(5, 40, hh) * 0.7;                    // lighter highlands / hills / mountains
@@ -268,8 +268,8 @@ export function color(x, z, h, out, nrm, fm) {
 // minimap pixel [r, g, b] 0..255 (the system shades it and draws paved areas on top)
 export function mapColor(x, z, h) {
   const hh = Number.isFinite(h) ? h : 0;
-  const maria = sm(0.5, 0.64, lfbm(x * 0.0009 + 40.5, z * 0.0009 - 30.2, 3));
-  let v = 150 - 50 * maria;
+  const maria = sm(0.47, 0.62, lfbm(x * 0.0009 + 40.5, z * 0.0009 - 30.2, 3));
+  let v = 150 - 58 * maria;
   v += (195 - v) * sm(5, 60, hh);
   v -= 35 * sm(-1, -20, hh);
   return [v, v * 0.99, v * 0.97];
