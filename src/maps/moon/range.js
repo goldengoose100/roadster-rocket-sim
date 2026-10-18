@@ -320,7 +320,8 @@ export function build(world) {
   safe('excavator', () => {
     const P = [];
     for (const x of [-1.7, 1.7]) P.push(part(mat.darkSteel, 1.1, 1.2, 6.0, x, 0.6, 0));
-    P.push(part(mat.darkSteel, 4.4, 0.5, 4.4, 0, 1.45, 0, 0, false));
+    P.push(part(mat.darkSteel, 2.4, 0.9, 3.0, 0, 0.75, 0));      // undercarriage between the tracks
+    P.push(part(mat.darkSteel, 4.4, 0.5, 4.4, 0, 1.45, 0));      // slewing ring
     P.push(part(mat.machine, 4.2, 2.0, 4.8, 0, 2.7, -0.4));
     P.push(part(mat.darkSteel, 4.0, 1.4, 1.2, 0, 2.4, -3.3));
     P.push(part(mat.machine, 1.6, 1.9, 1.9, -1.2, 4.65, 1.0));
