@@ -1,13 +1,13 @@
 {
-  "version": "2.4.0",
-  "file": "game-2.4.0.html",
-  "sha256": "9024ba8ce46f602a6a0641bb76e33422c3e904b63140d9c9a6acaafab45ef927",
-  "size": 1366693,
+  "version": "2.4.1",
+  "file": "game-2.4.1.html",
+  "sha256": "aadd705a285a11f125abeb2f0d7ad3d0fbfaefab00a8e80b6696d476778ccbb6",
+  "size": 1412972,
   "minShell": "1.1.0",
   "date": "2026-10-18",
   "notes": [
-    "New: ragdoll dummies in the Weapons Range! 7 kinds with HP bars, including a giant BOSS DUMMY",
-    "Limbs come off where you hit them; headshots knock them out. Blood can be switched off in the pause menu",
-    "Earn credits for every knockout; dummies respawn after 15 seconds"
+    "8 more silly cars in the Good Luck menu: toilet, bathtub, shopping cart, couch, cheese wedge, pizza slice, giant sneaker and burger",
+    "Ragdolls fly the same at any frame rate and game speed; knocked-down dummies climb back on their stands after 20 s",
+    "Fixes: running dummies over, bouncy car after a reset, Good Luck buttons no longer refill your air, garage try-ons with a Good Luck skin"
   ]
 }
