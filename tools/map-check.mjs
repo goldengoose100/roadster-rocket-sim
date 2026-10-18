@@ -12,7 +12,7 @@
 // process would mix their colliders. A map that takes longer than MAP_CHECK_TIMEOUT seconds (default
 // 300) to check is reported as an endless loop. Exit code 1 if anything FAILs.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
@@ -39,16 +39,21 @@ if (!flags.includes('--child')) {
     console.error(`usage: node tools/map-check.mjs [${MAP_IDS.join('|')}|all|desert] [--no-drive]`);
     process.exit(2);
   }
-  const timeout = Number(process.env.MAP_CHECK_TIMEOUT || 300) * 1000;
+  const timeout = Number(process.env.MAP_CHECK_TIMEOUT || 180) * 1000;
   const summary = [];
   for (const id of ids) {
-    const r = spawnSync(process.execPath, [SELF, '--child', id, ...flags.filter(f => f !== '--child')], { stdio: 'inherit', timeout, cwd: ROOT });
+    // fd 3 carries progress ("which part is building now"), so a hang can name the part that hung
+    const r = spawnSync(process.execPath, [SELF, '--child', id, ...flags.filter(f => f !== '--child')], {
+      stdio: ['inherit', 'inherit', 'inherit', 'pipe'], timeout, cwd: ROOT, maxBuffer: 64 << 20, env: { ...process.env, MAP_CHECK_FD: '3' },
+    });
+    const progress = r.output && r.output[3] ? String(r.output[3]).trim().split('\n').filter(Boolean) : [];
+    const last = progress[progress.length - 1];
     let verdict;
-    if (r.error && r.error.code === 'ETIMEDOUT') verdict = `FAIL (no answer after ${timeout / 1000} s: an endless loop while building? the last line above shows how far it got)`;
+    if (r.error && r.error.code === 'ETIMEDOUT') verdict = `FAIL (no answer after ${timeout / 1000} s, an endless loop? last activity: ${last || 'none'})`;
     else if (r.error) verdict = `FAIL (could not start the check: ${r.error.message})`;
     else if (r.status === 0) verdict = 'PASS';
     else if (r.status === 1) verdict = 'FAIL';
-    else verdict = `FAIL (the checker itself crashed: ${r.signal || 'exit ' + r.status})`;
+    else verdict = `FAIL (the check process died: ${r.signal || 'exit ' + r.status}; last activity: ${last || 'none'})`;
     summary.push([id, verdict]);
     if (verdict.startsWith('FAIL (')) console.log(`\n${paint('31;1', 'FAIL')}  ${id}: ${verdict.slice(6, -1)}`);
   }
