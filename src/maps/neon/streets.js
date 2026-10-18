@@ -402,7 +402,8 @@ export function build(world) {
     for (const [X, Z] of TRAFFIC) {
       for (const [sx, sz, ax, az] of corners) {
         const px = X + sx * (HALF + 0.6), pz = Z + sz * (HALF + 0.6);
-        if (hitsC(px - (ax < 0 ? ARM : 0), pz - (az < 0 ? ARM : 0), 1 + (ax ? ARM : 0), 1 + (az ? ARM : 0), 2)) continue;
+        const ex = px + ax * ARM, ez = pz + az * ARM;   // arm end
+        if (hits(Math.min(px, ex) - 1, Math.max(px, ex) + 1, Math.min(pz, ez) - 1, Math.max(pz, ez) + 1, 2)) continue;
         const y0 = gy(px, pz);
         const pole = new THREE.CylinderGeometry(0.16, 0.2, PH, 10); pole.translate(px, y0 + PH / 2, pz); steel.push(pole);
         solid(px, y0 + PH / 2, pz, 0.2, PH / 2, 0.2);

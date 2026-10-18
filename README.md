@@ -16,8 +16,7 @@ that actually runs out, and buildings that collapse block by block.
 - **Two new maps**, picked on the start screen (the game reloads on the new map):
   - **The Moon**: 1/6 gravity, craters, a lunar base, the Low-G Jump Zone and the Mega Ramp, the Moon Rock Mine
     weapons area with ragdoll dummies, Crater Canyon rings, a crashed lander, and Earth in the black sky.
-  - **Neon City**: a night city with skyscrapers and neon signs, Drag Avenue, a parking garage you can drive up
-    with a rooftop jump, the Neon Tunnel, the elevated Skyway, the Demolition Yard and rings between the towers.
+  - **Neon City**: a night city with skyscrapers and neon signs, Drag Avenue, the Neon Tunnel, the elevated Skyway, the Demolition Yard and rings between the towers.
 - The desert is unchanged.
 
 ## New in 2.4

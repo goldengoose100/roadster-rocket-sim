@@ -1,13 +1,13 @@
 {
-  "version": "2.4.1",
-  "file": "game-2.4.1.html",
-  "sha256": "aadd705a285a11f125abeb2f0d7ad3d0fbfaefab00a8e80b6696d476778ccbb6",
-  "size": 1412972,
+  "version": "2.5.0",
+  "file": "game-2.5.0.html",
+  "sha256": "6647ee5496fb7bf891f6485d567d3f0ad330faf1235af772786e64f2bea5a494",
+  "size": 1583009,
   "minShell": "1.1.0",
   "date": "2026-10-18",
   "notes": [
-    "8 more silly cars in the Good Luck menu: toilet, bathtub, shopping cart, couch, cheese wedge, pizza slice, giant sneaker and burger",
-    "Ragdolls fly the same at any frame rate and game speed; knocked-down dummies climb back on their stands after 20 s",
-    "Fixes: running dummies over, bouncy car after a reset, Good Luck buttons no longer refill your air, garage try-ons with a Good Luck skin"
+    "Two new maps! Pick The Moon or Neon City on the start screen",
+    "The Moon: 1/6 gravity, craters, a lunar base, giant low-gravity jumps, a mine to blow up and Earth in the sky",
+    "Neon City: a night city with skyscrapers, a neon tunnel, an elevated skyway and a demolition yard"
   ]
 }
