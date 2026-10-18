@@ -14,8 +14,7 @@ that actually runs out, and buildings that collapse block by block.
 ## New in 2.3
 
 - **Good Luck menu** (secret, needs its code): unlock everything, wear any of the 87 skins, turn the car into a
-  banana, hot dog, rubber duck, toilet, shopping cart, couch, cheese wedge, pizza slice, watermelon, bathtub,
-  giant sneaker or burger (looks only: it drives the same), and silly mods: monster wheels, tiny car, googly
+  banana, hot dog, rubber duck or watermelon (looks only: it drives the same), and silly mods: monster wheels, tiny car, googly
   eyes, party hat, wobbly jelly car, rainbow trail, confetti explosions, fart boost, clown horn and bouncy car.
 
 ## New in 2.2

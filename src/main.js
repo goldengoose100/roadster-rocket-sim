@@ -1052,7 +1052,7 @@ async function boot(hotData = {}) {
   });
 
   // shown once after updating to that exact version (a bugfix release without an entry shows nothing)
-  const WHATS_NEW = { '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a toilet and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
+  const WHATS_NEW = { '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a rubber duck and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {

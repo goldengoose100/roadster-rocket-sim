@@ -1,15 +1,11 @@
 {
-  "version": "2.2.0",
-  "file": "game-2.2.0.html",
-  "sha256": "8271427a8dcecad9ef08c71d797a8ecf268bc5e4e43a16abef347526483309e5",
-  "size": 1301851,
+  "version": "2.3.0",
+  "file": "game-2.3.0.html",
+  "sha256": "c1b167965f6167307a2026b4106444c70705b6bcc08584e4b65eff0bdffbd63d",
+  "size": 1343625,
   "minShell": "1.1.0",
   "date": "2026-10-18",
   "notes": [
-    "New: skin cases! Garage → Skins has a Street Case and an Elite Case with 37 skins in 5 rarities (grey, green, blue, purple, gold)",
-    "14 new guns: minigun, shotgun, grenades, flamethrower, laser, plasma, sniper, mines, cluster bomb, black hole, tesla coil, orbital laser, meteor shower and gravity hammer",
-    "Tab / Shift+Tab switches guns; hold the mouse for auto-fire",
-    "Mod menu: weapon cheats, Armageddon, +100K credits and 50 secret Dev skins",
-    "New in-game update screen and a What's new screen"
+    "New secret Good Luck menu (needs its code): silly cars (banana, hot dog, rubber duck, watermelon), a skin swapper for all 87 skins and silly mods like monster wheels, googly eyes, fart boost and a bouncy car"
   ]
 }
