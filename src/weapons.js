@@ -2,6 +2,10 @@
 // collision against world + debris, explosions handed to the destruction system.
 import * as THREE from 'three';
 import { raycast, makeHit, queryBox } from './colliders.js';
+import { Arsenal, ARSENAL } from './arsenal.js';
+
+export const WEAPON_LIST = [{ id: 'rocket', name: 'Rockets' }, { id: 'rail', name: 'Railgun' }, ...ARSENAL];
+const AUTO = new Set(['minigun', 'flame', 'laser']);
 import { heightAt } from './terrain.js';
 
 const _hit = makeHit();
@@ -32,7 +36,7 @@ export class Weapons {
     this.rockets = [];
     this.pool = [];
     for (let i = 0; i < 48; i++) { const m = makeRocketMesh(); m.visible = false; scene.add(m); this.pool.push(m); }
-    this.hack = { infiniteAmmo: false, rapidFire: false, blast: 1, homing: false, cluster: false };
+    this.hack = { infiniteAmmo: false, rapidFire: false, blast: 1, homing: false, cluster: false, fireRate: 1, noGravity: false, bigShots: false, explosiveRounds: false, rainbowTracers: false, nukeRounds: false };
     this.pendingBlasts = [];
     this.muzzleI = 0;
     this.fired = 0;
@@ -43,8 +47,33 @@ export class Weapons {
     this.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#9fe8ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.beam.visible = false; this.beam.frustumCulled = false; scene.add(this.beam);
     this.beamT = 0;
+    this.arsenal = new Arsenal(scene, fx, destruction, this.hack);
+    this.armCd = 0;
   }
-  toggleMode() { this.mode = this.mode === 'rocket' ? 'rail' : 'rocket'; return this.mode; }
+  // Tab / Shift+Tab cycle through every weapon
+  toggleMode(back = false) {
+    const i = WEAPON_LIST.findIndex(w => w.id === this.mode);
+    this.mode = WEAPON_LIST[(i + (back ? -1 : 1) + WEAPON_LIST.length) % WEAPON_LIST.length].id;
+    return this.mode;
+  }
+  get weapon() { return WEAPON_LIST.find(w => w.id === this.mode); }
+  isAuto() { return AUTO.has(this.mode); }
+  fireArsenal(model, vehicle, target) {
+    if (this.armCd > 0) return false;
+    const L = model.launcher;
+    model.group.position.copy(vehicle.pos); model.group.quaternion.copy(vehicle.quat); model.group.updateMatrixWorld(true);
+    this.aim(model, target, 1); model.group.updateMatrixWorld(true);
+    const from = new THREE.Vector3().setFromMatrixPosition(L.muzzles[this.muzzleI++ % L.muzzles.length].matrixWorld);
+    const dir = new THREE.Vector3().subVectors(target, from);
+    if (dir.lengthSq() < 4) dir.copy(vehicle.fwd);
+    dir.normalize();
+    if (this.hack.nukeRounds) { this.d.explode(target.clone(), 30, 3, 'nuke'); this.armCd = 1; this.fired++; if (this.onFire) this.onFire(from, 'rail'); return true; }
+    this.arsenal.fire(this.mode, from, dir, vehicle, target);
+    this.armCd = this.weapon.cd / (this.hack.rapidFire ? 4 : 1) / (this.hack.fireRate || 1);
+    this.fired++;
+    if (this.onFire) this.onFire(from, this.mode);
+    return true;
+  }
 
   fireRail(model, vehicle, target) {
     if (this.railCharge > 0) return false;
@@ -115,6 +144,7 @@ export class Weapons {
 
   tryFire(model, vehicle, target) {
     if (this.equipped && this.mode === 'rail') return this.fireRail(model, vehicle, target);
+    if (this.equipped && this.mode !== 'rocket') return this.fireArsenal(model, vehicle, target);
     if (!this.equipped || this.cooldown > 0 || this.reload > 0 || this.ammo <= 0) return false;
     const L = model.launcher;
     // use the physics state, not last frame's render transform
@@ -185,6 +215,8 @@ export class Weapons {
     }
     if (this.cooldown > 0) this.cooldown -= dt;
     if (this.railCharge > 0) this.railCharge = Math.max(0, this.railCharge - dt);
+    if (this.armCd > 0) this.armCd -= dt;
+    if (this.vehicle) this.arsenal.update(dt, this.vehicle);
     if (this.beamT > 0) { this.beamT -= dt; this.beam.material.opacity = Math.max(0, this.beamT / 0.45) * 0.9; this.beam.scale.x = this.beam.scale.z = 1 + (0.45 - this.beamT) * 3; if (this.beamT <= 0) this.beam.visible = false; }
     if (this.reload > 0) { this.reload -= dt; if (this.reload <= 0) { this.reload = 0; this.ammo = this.mag; } }
     for (let i = this.rockets.length - 1; i >= 0; i--) {
@@ -249,6 +281,7 @@ export class Weapons {
   }
 
   clear() {
+    this.arsenal.clear();
     for (const r of this.rockets) { r.mesh.visible = false; r.mesh.userData.busy = false; }
     this.pendingBlasts.length = 0;
     this.rockets.length = 0;

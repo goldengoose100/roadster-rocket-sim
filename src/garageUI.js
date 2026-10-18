@@ -2,6 +2,7 @@
 // All changes go through the Profile; ctx.apply() pushes them onto the car.
 import { TRIMS } from './config.js';
 import { UPGRADES, PRICES, COSMETICS, KIND_NAMES, findItem, carStats } from './garage.js';
+import { SKINS, CASES, RARITY, rollSkin, swatchCss } from './skins.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -23,7 +24,7 @@ export class GarageUI {
     this.tab = 'up';
     this.preview = null;     // { kind, id } of a locked part being tried on
     this.statsCache = new Map();
-    for (const [id, tab] of [['gt-up', 'up'], ['gt-style', 'style'], ['gt-builds', 'builds']]) $(id).onclick = () => { this.clearPreview(); this.tab = tab; this.render(); };
+    for (const [id, tab] of [['gt-up', 'up'], ['gt-style', 'style'], ['gt-skins', 'skins'], ['gt-builds', 'builds']]) $(id).onclick = () => { if (this.spinning) return; this.clearPreview(); this.tab = tab; this.render(); };
     $('g-done').onclick = () => ctx.close();
     const tr = $('g-trims');
     for (const t of Object.values(TRIMS)) {
@@ -40,11 +41,12 @@ export class GarageUI {
     const p = this.p;
     $('g-cr').textContent = p.cheats.unlimited ? '∞' : fmt(p.credits);
     for (const t of Object.values(TRIMS)) $('g-trim-' + t.id).setAttribute('aria-pressed', String(t.id === this.ctx.trimId()));
-    for (const [id, tab] of [['gt-up', 'up'], ['gt-style', 'style'], ['gt-builds', 'builds']]) $(id).setAttribute('aria-pressed', String(tab === this.tab));
+    for (const [id, tab] of [['gt-up', 'up'], ['gt-style', 'style'], ['gt-skins', 'skins'], ['gt-builds', 'builds']]) $(id).setAttribute('aria-pressed', String(tab === this.tab));
     const body = $('g-body');
     body.innerHTML = '';
     if (this.tab === 'up') this.renderUpgrades(body);
     else if (this.tab === 'style') this.renderStyle(body);
+    else if (this.tab === 'skins') this.renderSkins(body);
     else this.renderBuilds(body);
     this.renderStats();
     const c = this.ctx.condition();
@@ -118,6 +120,63 @@ export class GarageUI {
       };
       body.appendChild(sec);
     }
+  }
+
+  renderSkins(body) {
+    const p = this.p;
+    const fmtOdds = (c) => Object.entries(c.odds).filter(([, v]) => v).map(([k, v]) => `<i style="color:${RARITY[k].col}">${v}%</i>`).join(' ');
+    let html = '<div class="gcases">';
+    for (const c of CASES) html += `<div class="gcase" style="--cc:${c.col}"><div class="gcase-box"></div><b>${c.name}</b><span class="godds">${fmtOdds(c)}</span>
+      <button class="btn gbuy" id="gopen-${c.id}" ${p.canAfford(c.price) ? '' : 'data-poor="1"'}>Open · ${p.cheats.unlimited ? 'free' : fmt(c.price) + ' CR'}</button></div>`;
+    html += '</div><div class="greel" id="greel" hidden><div class="greel-strip" id="greel-strip"></div><i class="greel-mark"></i></div><div id="gwin" class="gwin" hidden></div>';
+    const col = p.collection();
+    html += `<h3 class="gcol">Your skins <span>${col.have}/${col.total} collected · ${p.d.opened} cases opened</span></h3><div class="gskins">`;
+    const cur = p.d.setup.skin;
+    html += `<button class="gskin" data-id="" aria-pressed="${!cur}" style="--rc:#5d6873"><i style="background:${findItem('paint', p.look().paint).color}"></i><span>Plain paint</span></button>`;
+    const show = SKINS.filter(s => p.hasSkin(s.id));
+    for (const s of show) html += `<button class="gskin${s.rarity === 'dev' ? ' dev' : ''}" data-id="${s.id}" aria-pressed="${s.id === cur}" style="--rc:${RARITY[s.rarity].col}" title="${esc(RARITY[s.rarity].name)}"><i style="background:${swatchCss(s)}"></i><span>${esc(s.name)}</span></button>`;
+    html += '</div>';
+    if (!show.length) html += '<p class="gtx">Open a case to win your first skin. Grey is common, gold is legendary.</p>';
+    body.innerHTML = html;
+    body.querySelectorAll('.gskin').forEach(b => { b.onclick = () => { p.setSkin(b.dataset.id || null); this.ctx.apply(); this.ctx.sound.click(); this.render(); }; });
+    for (const c of CASES) $('gopen-' + c.id).onclick = () => this.openCase(c);
+  }
+  // spin a reel of skins and land on the one the case gave
+  openCase(c) {
+    if (this.spinning) return;
+    const res = this.p.openCase(c.id);
+    if (!res) { this.ctx.sound.warn(); this.ctx.toast(`Not enough credits: ${c.name} costs ${fmt(c.price)} CR`, 'warn', 2200); return; }
+    this.spinning = true;
+    $('g-cr').textContent = this.p.cheats.unlimited ? '∞' : fmt(this.p.credits);
+    const strip = $('greel-strip'), N = 46, WIN = 40;
+    let tiles = '';
+    for (let i = 0; i < N; i++) {
+      const s = i === WIN ? res.skin : rollSkin(c);
+      tiles += `<div class="gtile" style="--rc:${RARITY[s.rarity].col}"><i style="background:${swatchCss(s)}"></i><span>${esc(s.name)}</span></div>`;
+    }
+    strip.innerHTML = tiles;
+    $('greel').hidden = false; $('gwin').hidden = true;
+    strip.style.transition = 'none'; strip.style.transform = 'translateX(0)';
+    void strip.offsetWidth;
+    const tileW = 112, reelW = $('greel').clientWidth || 440;
+    const x = -(WIN * tileW + tileW / 2 - reelW / 2) + (Math.random() - 0.5) * 60;
+    strip.style.transition = 'transform 4.2s cubic-bezier(.12,.75,.1,1)';
+    strip.style.transform = `translateX(${x}px)`;
+    let tick = 0;
+    const ticker = setInterval(() => { tick++; if (tick % Math.ceil(1 + tick / 8) === 0) this.ctx.sound.click(); }, 60);
+    setTimeout(() => {
+      clearInterval(ticker);
+      this.spinning = false;
+      const r = RARITY[res.skin.rarity];
+      const w = $('gwin');
+      if (!w) return;
+      w.hidden = false; w.style.setProperty('--rc', r.col);
+      w.innerHTML = `<span>${r.name}</span><b>${esc(res.skin.name)}</b>${res.dup ? `<em>Duplicate · +${fmt(res.refund)} CR back</em>` : '<em>New skin! Equipped.</em>'}`;
+      if (!res.dup) { this.p.setSkin(res.skin.id); this.ctx.apply(); }
+      this.ctx.sound.record();
+      if (res.skin.rarity === 'gold' || res.skin.rarity === 'purple') this.ctx.toast(`${r.name}: ${res.skin.name}!`, 'good', 3000);
+      setTimeout(() => { if (this.tab === 'skins' && !this.spinning) this.render(); }, 2600);
+    }, 4400);
   }
 
   renderBuilds(body) {

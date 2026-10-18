@@ -11,6 +11,19 @@ that actually runs out, and buildings that collapse block by block.
 
 ![Start screen](docs/start.png)
 
+## New in 2.2
+
+- **Skin cases** (Garage → Skins): a Street Case (1,500 CR) and an Elite Case (5,000 CR) with a spinning reel.
+  37 skins in 5 rarities: Common (grey), Uncommon (green), Rare (blue), Epic (purple) and Legendary (gold).
+  Duplicates refund half their value. Animated skins: neon lines, hologram, lava, galaxy, chrome, rainbow.
+- **14 new guns** on top of rockets and the railgun: minigun, shotgun, grenade launcher, flamethrower, laser, plasma,
+  sniper, mines, cluster bomb, black hole, tesla coil, orbital laser, meteor shower and the hammer.
+  Tab / Shift+Tab to switch; hold the mouse for auto-fire.
+- **Mod menu**: pick any gun, fire-rate slider, no bullet drop, giant shots, explosive rounds, rainbow tracers,
+  nuke rounds, meteor shower / orbital laser / black hole / Armageddon buttons, +100K credits, unlock all case skins
+  and 50 secret Dev skins you can only get from the menu.
+- A new update window and a "What's new" screen after each update.
+
 ## New in 2.0
 
 - **Garage**: a showroom with a turntable (start screen or pause menu). 5 upgrades with 3 levels each

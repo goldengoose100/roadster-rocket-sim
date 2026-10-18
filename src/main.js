@@ -15,7 +15,7 @@ import { World, makeSedan, makeSemi } from './world.js';
 import { Hacks } from './hacks.js';
 import { Destruction } from './destruction.js';
 import { Effects } from './effects.js';
-import { Weapons } from './weapons.js';
+import { Weapons, WEAPON_LIST } from './weapons.js';
 import { CameraRig, CAMERA_MODES } from './camera.js';
 import { HUD } from './hud.js';
 import { Input } from './input.js';
@@ -28,6 +28,7 @@ import { Profile, Showroom, COSMETICS, findItem, EARN } from './garage.js';
 import { GarageUI } from './garageUI.js';
 import { Rewards } from './rewards.js';
 import { PaceCar } from './pacecar.js';
+import { findSkin, SKINS } from './skins.js';
 
 const $ = (id) => document.getElementById(id);
 const DT = PHYS.DT;
@@ -152,6 +153,7 @@ async function boot(hotData = {}) {
   vehicle.phys2 = settings.physics !== 'classic';
   vehicle.tune = profile.tune();
   vehicle.setTrim(profile.effectiveTrim(TRIMS[settings.trim] || TRIMS.rocket));
+  weapons.vehicle = vehicle;
   const dmgVis = new CarDamageVisual(model);
   const looseWheels = new LooseWheels(scene);
   const showroom = new Showroom(renderer);
@@ -284,7 +286,7 @@ async function boot(hotData = {}) {
   };
   destruction.glass.onShatter = (p, n) => sound.glass(camera.position.distanceTo(p), n);
   destruction.onImpact = (pos, speed) => { if (camera.position.distanceTo(pos) < 60) sound.impact(Math.min(8, speed * 0.6)); };
-  weapons.onFire = (p, kind) => { if (kind === 'rail') { sound.tone(180, 0.5, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 3000, 0.7, 0.4); rig.trauma = Math.min(1, rig.trauma + 0.3); rig.fovKick -= 4; } else { sound.launch(); rig.fovKick -= 1.5; } };
+  weapons.onFire = (p, kind) => { if (kind && kind !== 'rail' && kind !== 'rocket') { sound.gun(kind); return; } if (kind === 'rail') { sound.tone(180, 0.5, 0.25, 'sawtooth'); sound.oneShot(sound.noise, 'highpass', 3000, 0.7, 0.4); rig.trauma = Math.min(1, rig.trauma + 0.3); rig.fovKick -= 4; } else { sound.launch(); rig.fovKick -= 1.5; } };
   weapons.onPickup = () => {
     model.launcher.group.visible = true;
     sound.pickup();
@@ -362,7 +364,10 @@ async function boot(hotData = {}) {
   const applyLook = (preview = {}) => {
     const L = Object.assign(profile.look(), preview);
     const hv = hacks && hacks.unlocked ? hacks.v : null;
-    if (hv && hv.paint) model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); else model.setPaint(findItem('paint', L.paint));
+    const skin = preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
+    if (hv && hv.paint) { model.setSkin(null); model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); }
+    else if (skin) model.setSkin(skin);
+    else model.setSkin(null, findItem('paint', L.paint));
     model.setLook({ wheels: L.wheels, wing: L.wing });
     const glow = findItem('glow', L.glow), hackGlow = hv && hv.underglow;
     model.underglow.visible = !!(hackGlow || glow.color);
@@ -522,7 +527,7 @@ async function boot(hotData = {}) {
       if (code === 'Minus' || code === 'NumpadSubtract') continue; // handled instantly below
       if (hacks.key(code)) continue;
       if (code === 'KeyQ' || code === 'KeyE') { G.rollTap = code === 'KeyE' ? 1 : -1; continue; }
-      if (code === 'Tab' && weapons.equipped) { const m = weapons.toggleMode(); hud.toast(m === 'rail' ? 'Railgun · pierces buildings · click or B' : 'Rocket launcher', 'warn', 1500); continue; }
+      if ((code === 'Tab' || code === 'ShiftTab') && weapons.equipped) { weapons.toggleMode(code === 'ShiftTab'); const w = weapons.weapon; hud.toast(`${w.name}${w.tip ? ' · ' + w.tip : w.id === 'rail' ? ' · pierces buildings' : ''} · Tab next`, 'warn', 1800); continue; }
       if (code === 'KeyV') hud.toast(CAMERA_MODES[rig.mode = (rig.mode + 1) % CAMERA_MODES.length] + ' camera', '', 1200), rig.snap();
       else if (code === 'KeyR') resetUpright();
       else if (code === 'KeyF') { const m = ['auto', 'max', 'off']; vehicle.fan.mode = m[(m.indexOf(vehicle.fan.mode) + 1) % 3]; hud.toast('Fan suction ' + vehicle.fan.mode.toUpperCase(), 'ice', 1400); }
@@ -1019,6 +1024,7 @@ async function boot(hotData = {}) {
     if (!e.repeat) hacks.toggle();
   });
 
+  const WHATS_NEW = ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A cooler update window'];
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {
@@ -1037,6 +1043,24 @@ async function boot(hotData = {}) {
       G.paused = G.state === 'play';
     };
     desk.onUpdateAvailable(showUpdate);
+    // "What's new" splash, once per installed version (reuses the update window)
+    try {
+      if (localStorage.getItem('rrs-seen-ver') !== desk.gameVersion) {
+        const first = localStorage.getItem('rrs-seen-ver') === null && !localStorage.getItem('rrs.garage');
+        localStorage.setItem('rrs-seen-ver', desk.gameVersion);
+        if (!first && WHATS_NEW.length) setTimeout(() => {
+          if (!$('upd').hidden) return;
+          pending = null;
+          $('upd-title').textContent = "What's new";
+          $('upd-ver').textContent = `Version ${desk.gameVersion}`;
+          $('upd-notes').innerHTML = WHATS_NEW.map(n => `<li>${n}</li>`).join('');
+          $('upd-status').textContent = ''; $('upd-barw').hidden = true;
+          $('upd-go').textContent = "Let's go"; $('upd-go').disabled = false;
+          $('upd-go').addEventListener('click', () => { if (!pending) $('upd-later').click(); }, { once: true });
+          $('upd').hidden = false;
+        }, 1500);
+      }
+    } catch (e) { /* storage blocked: skip the splash */ }
     desk.onNotice((n) => hud.toast(n, 'warn', 7000));
     desk.onProgress((p) => { $('upd-barw').hidden = false; $('upd-bar').style.width = (p * 100).toFixed(0) + '%'; $('upd-status').textContent = `Downloading… ${(p * 100).toFixed(0)}%`; });
     $('upd-go').onclick = async () => {
@@ -1083,7 +1107,7 @@ async function boot(hotData = {}) {
         controls.rollTap = G.rollTap; G.rollTap = 0;
         if (G.state === 'play') {
           // fire
-          const fire = input.clicks > 0 || controls.fire;
+          const fire = input.clicks > 0 || controls.fire || (input.mouseDown && weapons.isAuto());
           input.clicks = 0;
           if (fire && weapons.equipped) weapons.tryFire(model, vehicle, G.aim);
         }
@@ -1115,6 +1139,7 @@ async function boot(hotData = {}) {
       }
       handleCarEvents();
       dmgVis.update(dt);
+      model.tickSkin(performance.now() / 1000);
       looseWheels.update(running ? dt * G.timeScale : 0);
 
       if (!inGarage) updateCarModel(dt);
@@ -1187,6 +1212,7 @@ async function boot(hotData = {}) {
     profile, garageUI, showroom, openGarage, rewards, paceCar, env, dmgVis, looseWheels, setPhysics,
     startGame, teleport: (i) => teleport(teleports.find(t => t.key === i) || teleports[0]),
     step(n, c) { controls = Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false, boost: false, lift: false, descend: false, roll: 0, fire: false }, c || {}); for (let i = 0; i < n; i++) stepOnce(); weapons.update(n * DT); destruction.sync(); gameplay(n * DT); },
+    weaponList: WEAPON_LIST, skinIds: SKINS.map(s => s.id),
     fireAt(x, y, z) { if (!weapons.equipped) weapons.equip(); return weapons.tryFire(model, vehicle, new THREE.Vector3(x, y, z)); },
     setCam(m) { rig.mode = m; rig.snap(); },
     renderInfo() { renderer.info.autoReset = false; renderer.info.reset(); const t = performance.now(); renderer.render(scene, camera); const ms = performance.now() - t; const r = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ms }; renderer.info.autoReset = true; let meshes = 0; scene.traverse(o => { if (o.isMesh) meshes++; }); r.meshes = meshes; return r; },

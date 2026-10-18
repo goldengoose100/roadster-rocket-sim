@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { TRIMS, PAINTS, PHYS, MPH } from './config.js';
 import { Vehicle } from './vehicle.js';
 import { heightAt } from './terrain.js';
+import { SKINS, CASES, RARITY, findSkin, rollSkin } from './skins.js';
 
 // ---------- what can be bought ----------
 export const PRICES = [0, 1000, 3000, 7500];
@@ -64,11 +65,12 @@ export class Profile {
   constructor(store) {
     this.store = store;
     const d = store ? store.get('garage', null) : null;
-    this.d = Object.assign({ v: 1, credits: 0, earned: 0, owned: { motor: 0, tires: 0, fan: 0, thrust: 0, tank: 0 }, parts: [], setup: blankSetup(), builds: [null, null, null] }, d || {});
+    this.d = Object.assign({ v: 1, credits: 0, earned: 0, owned: { motor: 0, tires: 0, fan: 0, thrust: 0, tank: 0 }, parts: [], skins: [], opened: 0, setup: blankSetup(), builds: [null, null, null] }, d || {});
+    if (!Array.isArray(this.d.skins)) this.d.skins = [];
     this.d.owned = Object.assign({ motor: 0, tires: 0, fan: 0, thrust: 0, tank: 0 }, this.d.owned);
     this.d.setup = Object.assign(blankSetup(), this.d.setup);
     this.d.setup.levels = Object.assign(blankSetup().levels, this.d.setup.levels);
-    this.cheats = { unlimited: false, unlockAll: false };
+    this.cheats = { unlimited: false, unlockAll: false, unlockSkins: false, devSkins: false };
     this.onChange = null;
   }
   save() { if (this.store) this.store.set('garage', this.d); if (this.onChange) this.onChange(); }
@@ -105,13 +107,34 @@ export class Profile {
     const th = lvlVal('thrust', 'thrust', levels.thrust), air = lvlVal('tank', 'air', levels.tank);
     return { ...base, airMax: Math.round(base.airMax * air), rearThrust: base.rearThrust * th, liftThrust: base.liftThrust * th, sideThrust: base.sideThrust * th };
   }
+  // ---------- skins + cases ----------
+  hasSkin(id) {
+    const s = findSkin(id); if (!s) return false;
+    if (this.d.skins.includes(id)) return true;
+    return s.rarity === 'dev' ? this.cheats.devSkins : this.cheats.unlockSkins;
+  }
+  skin() { const id = this.d.setup.skin; return id && this.hasSkin(id) ? findSkin(id) : null; }
+  setSkin(id) { if (id && !this.hasSkin(id)) return false; this.d.setup.skin = id || null; this.save(); return true; }
+  // pay, roll, keep it (or get half its value back for a duplicate)
+  openCase(caseId, rnd = Math.random) {
+    const c = CASES.find(x => x.id === caseId);
+    if (!c || !this.pay(c.price)) return null;
+    const skin = rollSkin(c, rnd), dup = this.d.skins.includes(skin.id);
+    let refund = 0;
+    if (dup) { refund = Math.round(RARITY[skin.rarity].value / 2); this.d.credits += refund; } else this.d.skins.push(skin.id);
+    this.d.opened++;
+    this.save();
+    return { skin, dup, refund, case: c };
+  }
+  collection() { const normal = SKINS.filter(s => s.rarity !== 'dev'); return { have: normal.filter(s => this.hasSkin(s.id)).length, total: normal.length }; }
   // builds
-  saveBuild(i, trim) { this.d.builds[i] = { trim, levels: { ...this.d.setup.levels }, ...this.look(), at: Date.now() }; this.save(); }
+  saveBuild(i, trim) { this.d.builds[i] = { trim, levels: { ...this.d.setup.levels }, ...this.look(), skin: this.d.setup.skin || null, at: Date.now() }; this.save(); }
   loadBuild(i) {
     const b = this.d.builds[i];
     if (!b) return null;
     for (const u of UPGRADES) this.d.setup.levels[u.id] = Math.min(b.levels[u.id] || 0, this.owned(u.id));
     for (const k of Object.keys(COSMETICS)) if (this.hasPart(k, b[k])) this.d.setup[k] = b[k];
+    this.d.setup.skin = b.skin && this.hasSkin(b.skin) ? b.skin : null;
     this.save();
     return b;
   }

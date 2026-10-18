@@ -60,6 +60,19 @@ if (want('garage')) {
   for (const [i, ang] of [[7, 2.2], [8, 3.6]]) { await ev((a) => { window.__sim.showroom.angle = a; window.__sim.showroom.spin = 0; }, ang); await shot(`0${i}-garage-turntable-${i - 6}`, 600); }
   await page.click('#gt-style'); await page.click('.gsec:nth-child(3) button[data-id=fin]'); await page.waitForTimeout(200);
   await shot('09-garage-try-rocket-fin', 500);
+  // skins + cases
+  await ev(() => window.__sim.profile.earn(12000));
+  await page.click('#gt-skins'); await shot('09b-skins-cases', 600);
+  const cr0 = await ev(() => window.__sim.profile.credits);
+  await page.click('#gopen-street'); await shot('09c-case-reel-spinning', 1500);
+  await page.waitForFunction(() => !document.getElementById('gwin').hidden, null, { timeout: 15000 }).catch(() => {});
+  await shot('09d-case-win', 500);
+  const won = await ev(() => ({ n: window.__sim.profile.d.skins.length, cr: window.__sim.profile.credits }));
+  check('opening a Street case costs 1500 and gives a skin', won.n === 1 && won.cr <= cr0 - 1500 + 5000, JSON.stringify(won));
+  await page.click('#gopen-elite'); await page.waitForFunction(() => !document.getElementById('gwin').hidden && window.__sim.profile.d.opened === 2, null, { timeout: 15000 }).catch(() => {});
+  await page.click('.gskin[data-id^="' + await ev(() => window.__sim.profile.d.skins[0]) + '"]');
+  await shot('09e-skin-equipped', 900);
+  check('a won skin can be equipped', await ev(() => window.__sim.profile.skin()?.id === window.__sim.profile.d.skins[0]));
   await page.click('#g-done');
   check('garage closes back to the start screen', await ev(() => !document.getElementById('start').hidden && document.getElementById('garage').hidden));
 }
@@ -223,9 +236,30 @@ if (want('rail')) {
   await ev(() => { window.__sim.step(240 * 2, {}); });
   check('railgun recharged and fires again', await ev(() => window.__sim.fireAt(640, 3, -770)), '');
   await page.keyboard.press('Tab');
-  check('Tab back to rockets', await page.waitForFunction(() => window.__sim.weapons.mode === 'rocket', null, { timeout: 30000 }).then(() => true).catch(() => false));
+  await page.waitForFunction(() => window.__sim.weapons.mode === 'minigun', null, { timeout: 30000 }).catch(() => {});
+  await page.keyboard.press('Shift+Tab');
+  await page.waitForFunction(() => window.__sim.weapons.mode === 'rail', null, { timeout: 30000 }).catch(() => {});
+  await page.keyboard.press('Shift+Tab');
+  check('Tab to the next gun, Shift+Tab back to rockets', await page.waitForFunction(() => window.__sim.weapons.mode === 'rocket', null, { timeout: 30000 }).then(() => true).catch(() => false));
   await camOff();
   await ev(() => window.__sim.destruction.rebuild());
+}
+
+// ---------- 14 new guns ----------
+if (want('guns')) {
+  const ids = await ev(() => window.__sim.weaponList.map(w => w.id).filter(id => id !== 'rocket' && id !== 'rail'));
+  let ok = 0; const bad = [];
+  for (const [i, id] of ids.entries()) {
+    await ev(() => { window.__sim.destruction.rebuild(); window.__sim.teleport(1); });
+    await ev((id) => { const w = window.__sim.weapons; w.equip(); w.mode = id; w.armCd = 0; }, id);
+    await cam([600, 16, -600], [560, 2, -705], 60);
+    const fired = await ev(() => { let n = 0; for (let k = 0; k < 6; k++) { window.__sim.weapons.armCd = 0; if (window.__sim.fireAt(560, 2.5, -705)) n++; window.__sim.step(12, {}); } return n; });
+    await ev(() => window.__sim.step(240 * 1.2, {}));
+    await shot(`40-gun-${String(i + 1).padStart(2, '0')}-${id}`, 250);
+    if (fired > 0) ok++; else bad.push(id);
+  }
+  check(`all ${ids.length} new guns fire`, ids.length === 14 && ok === ids.length, bad.join(','));
+  await camOff(); await ev(() => { window.__sim.weapons.mode = 'rocket'; window.__sim.destruction.rebuild(); });
 }
 
 // ---------- slipstream (pace car) ----------
@@ -277,6 +311,14 @@ if (want('mods')) {
   await page.click('#hkc-unlimitedCredits'); await page.click('#hkc-unlockAll');
   const ch = await ev(() => ({ cr: document.getElementById('h-cr').textContent, owned: window.__sim.profile.owned('fan') }));
   check('unlimited credits + unlock all', ch.cr.startsWith('∞') && ch.owned === 3, JSON.stringify(ch));
+  await page.click('#hkc-unlockSkins'); await page.click('#hkc-devSkins');
+  check('mod menu unlocks all 87 skins incl. 50 Dev skins', await ev(() => window.__sim.skinIds.filter(id => window.__sim.profile.hasSkin(id)).length) === 87);
+  await page.click('#hk-tab-Weapons'); await shot('27b-mod-menu-weapons-tab', 400);
+  await ev(() => window.__sim.teleport(1));
+  await page.click('#hkc-doMeteor'); await ev(() => window.__sim.step(240 * 3, {}));
+  await page.click('#hkc-doArmageddon'); await ev(() => window.__sim.step(240 * 2, {}));
+  await shot('27c-armageddon', 600);
+  await page.click('#hk-tab-Garage'); await page.click('#hkc-unlockSkins'); await page.click('#hkc-devSkins');
   await page.click('#hk-tab-Car');
   await shot('27-mod-menu-car-tab', 300);
   await page.click('#hkc-noDamage');

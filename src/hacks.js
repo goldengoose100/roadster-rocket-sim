@@ -35,6 +35,8 @@ function sha256(str) {
 
 const GRAVITY = [['Earth', 1], ['Mars', 0.38], ['Moon', 0.165], ['Zero-G', 0], ['Jupiter', 2.5]];
 const TOD = [['Day', 'day'], ['Golden hour', 'golden'], ['Sunset', 'sunset'], ['Night', 'night']];
+import { WEAPON_LIST } from './weapons.js';
+const GUNS = WEAPON_LIST.map(w => [w.name, w.id]);
 const SPAWNS = [['Crate tower', 'crates'], ['Concrete tower', 'tower'], ['Brick wall', 'wall'], ['Barrel pile', 'barrels'], ['Car', 'car'], ['Semi', 'semi'], ['Jump ramp', 'ramp'], ['Pace car (slipstream)', 'pace']];
 
 // every option in the menu
@@ -61,6 +63,17 @@ const DEFS = [
   { tab: 'Weapons', id: 'blast', label: 'Explosion size', type: 'slider', min: 1, max: 5, step: 0.25, def: 1, unit: '×' },
   { tab: 'Weapons', id: 'homing', label: 'Homing rockets', type: 'toggle', def: false },
   { tab: 'Weapons', id: 'cluster', label: 'Cluster rockets', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'gunPick', label: 'Pick a weapon', type: 'select', options: GUNS, def: 'rocket' },
+  { tab: 'Weapons', id: 'fireRate', label: 'Fire rate (all guns)', type: 'slider', min: 1, max: 10, step: 0.5, def: 1, unit: '×' },
+  { tab: 'Weapons', id: 'noGravity', label: 'Laser-straight shots (no bullet drop)', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'bigShots', label: 'Giant projectiles', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'explosiveRounds', label: 'Explosive rounds', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'rainbowTracers', label: 'Rainbow tracers', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'nukeRounds', label: 'Every shot is a nuke', type: 'toggle', def: false },
+  { tab: 'Weapons', id: 'doMeteor', label: 'Meteor shower at the crosshair', type: 'button', text: 'RAIN' },
+  { tab: 'Weapons', id: 'doOrbital', label: 'Orbital laser at the crosshair', type: 'button', text: 'FIRE' },
+  { tab: 'Weapons', id: 'doHole', label: 'Black hole at the crosshair', type: 'button', text: 'SUMMON' },
+  { tab: 'Weapons', id: 'doArmageddon', label: 'Armageddon (everything at once)', type: 'button', text: 'END IT' },
   { tab: 'Weapons', id: 'doNuke', label: 'Drop a nuke at the crosshair [K]', type: 'button', text: 'NUKE' },
   { tab: 'Weapons', id: 'doStrike', label: 'Airstrike at the crosshair [L]', type: 'button', text: 'CALL IN' },
   { tab: 'World', id: 'timeScale', label: 'Game speed (bullet time [Y])', type: 'slider', min: 0.1, max: 2, step: 0.05, def: 1, unit: '×' },
@@ -86,10 +99,13 @@ const DEFS = [
   { tab: 'Visual', id: 'crashCam', label: 'Slow-motion crash cam', type: 'toggle', def: false },
   { tab: 'Garage', id: 'unlimitedCredits', label: 'Unlimited credits', type: 'toggle', def: false },
   { tab: 'Garage', id: 'unlockAll', label: 'Unlock all upgrades & parts', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'unlockSkins', label: 'Unlock all case skins', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'devSkins', label: 'Unlock 50 secret Dev skins', type: 'toggle', def: false },
+  { tab: 'Garage', id: 'doCash', label: 'Add 100,000 credits', type: 'button', text: '+100K' },
   { tab: 'Garage', id: 'doRepair', label: 'Instant repair [Z]', type: 'button', text: 'REPAIR' },
 ];
 const TABS = ['Car', 'Flight', 'Weapons', 'World', 'Visual', 'Garage', 'Keys'];
-const KEYS = [['-', 'Show / hide this menu'], ['J', 'Moon jump'], ['T', 'Teleport to the crosshair'], ['K', 'Nuke the crosshair'], ['L', 'Airstrike the crosshair'], ['U', 'Spawn the selected object'], ['Y', 'Bullet time on / off'], ['I', 'Free camera'], ['O', 'Photo mode'], ['Z', 'Instant repair'], ['Q / E', 'Barrel roll (in the air)']];
+const KEYS = [['-', 'Show / hide this menu'], ['J', 'Moon jump'], ['T', 'Teleport to the crosshair'], ['K', 'Nuke the crosshair'], ['L', 'Airstrike the crosshair'], ['U', 'Spawn the selected object'], ['Y', 'Bullet time on / off'], ['I', 'Free camera'], ['O', 'Photo mode'], ['Z', 'Instant repair'], ['Q / E', 'Barrel roll (in the air)'], ['Tab / Shift+Tab', 'Next / previous weapon'], ['Hold mouse', 'Auto-fire (minigun, flamer, laser…)']];
 const BOOT_LINES = [
   'connecting to roadster ECU', 'bypassing fan limiter', 'unlocking 10x thrusters', 'patching gravity.dll',
   'injecting rocket_pod.sys', 'disabling speed governor', 'overclocking cold-gas valves', 'spoofing air tank sensor',
@@ -255,6 +271,9 @@ export class Hacks {
     switch (id) {
       case 'power': case 'topSpeed': case 'grip': case 'thrust': case 'noFlip': case 'stickyFan': case 'infiniteAir': case 'rollAnyTrim': case 'noDamage': case 'noTireHeat': h[id] = val; break;
       case 'unlimitedCredits': a.profile.cheats.unlimited = !!val; a.onCheats(); break;
+      case 'unlockSkins': case 'devSkins': a.profile.cheats[id] = !!val; a.onCheats(); break;
+      case 'gunPick': if (val !== 'rocket' || a.weapons.mode !== 'rocket') { a.weapons.mode = val; if (!a.weapons.equipped) a.weapons.equip(); } break;
+      case 'fireRate': case 'noGravity': case 'bigShots': case 'explosiveRounds': case 'rainbowTracers': case 'nukeRounds': a.weapons.hack[id] = val; break;
       case 'unlockAll': a.profile.cheats.unlockAll = !!val; a.onCheats(); break;
       case 'gravity': h.gravity = val; a.destruction.gravityScale = this.v.floatDebris ? 0 : val; break;
       case 'floatDebris': a.destruction.gravityScale = val ? 0 : this.v.gravity; for (const b of a.destruction.bodies) b.wake(); break;
@@ -289,6 +308,11 @@ export class Hacks {
       case 'doCollapse': a.toast(`${a.destruction.collapseAll()} blocks knocked loose`, 'warn', 1800); break;
       case 'doRebuild': a.rebuild(); break;
       case 'doRepair': a.repair(); break;
+      case 'doMeteor': a.weapons.arsenal.fire('meteor', aim, aim, a.vehicle, aim); a.toast('Meteor shower', 'warn', 1500); break;
+      case 'doOrbital': a.weapons.arsenal.fire('orbital', aim, aim, a.vehicle, aim); a.toast('Orbital laser locked', 'warn', 1500); break;
+      case 'doHole': a.weapons.arsenal.fire('blackhole', aim.clone().setY(aim.y + 3), new THREE.Vector3(0, 0, 0), a.vehicle, aim); break;
+      case 'doArmageddon': for (const k of ['meteor', 'orbital', 'clusterbomb']) a.weapons.arsenal.fire(k, aim.clone().setY(aim.y + 20), new THREE.Vector3(0, -1, 0), a.vehicle, aim); a.nuke(aim); a.toast('ARMAGEDDON', 'warn', 2000); break;
+      case 'doCash': a.profile.earn(100000); a.onCheats(); a.toast('+100,000 credits', '', 1500); break;
       default: break;
     }
   }

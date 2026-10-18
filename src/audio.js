@@ -119,6 +119,26 @@ export class Sound {
     this.oneShot(this.noise, 'highpass', 5000, 0.5 * a, 0.5);
     for (let i = 0; i < Math.min(6, n / 3); i++) this.tone(2400 + Math.random() * 3000, 0.15 + Math.random() * 0.2, 0.03 * a, 'triangle', Math.random() * 0.25);
   }
+  // sounds for the 2.2 arsenal
+  gun(kind) {
+    if (!this.ctx) return;
+    switch (kind) {
+      case 'minigun': this.oneShot(this.noise, 'bandpass', 1800, 0.25, 0.06); break;
+      case 'shotgun': this.oneShot(this.noise, 'lowpass', 1500, 0.8, 0.35); this.oneShot(this.brown, 'lowpass', 300, 0.6, 0.3); break;
+      case 'grenade': case 'clusterbomb': this.oneShot(this.noise, 'lowpass', 700, 0.5, 0.25, { sweep: 200 }); break;
+      case 'flame': this.oneShot(this.noise, 'lowpass', 600, 0.12, 0.12); break;
+      case 'laser': this.tone(1600 + Math.random() * 200, 0.07, 0.03, 'sawtooth'); break;
+      case 'plasma': this.tone(220, 0.5, 0.15, 'square'); this.oneShot(this.noise, 'bandpass', 900, 0.4, 0.5, { sweep: 3000 }); break;
+      case 'sniper': this.oneShot(this.noise, 'highpass', 2000, 0.9, 0.3); this.oneShot(this.brown, 'lowpass', 400, 0.9, 0.6); break;
+      case 'mines': this.tone(900, 0.08, 0.06, 'square'); break;
+      case 'blackhole': this.tone(60, 1.5, 0.3, 'sine'); this.tone(90, 1.5, 0.15, 'sawtooth'); break;
+      case 'tesla': for (let i = 0; i < 4; i++) this.tone(2000 + Math.random() * 2000, 0.05, 0.05, 'square', i * 0.03); this.oneShot(this.noise, 'highpass', 4000, 0.4, 0.3); break;
+      case 'orbital': this.tone(120, 1.4, 0.2, 'sawtooth'); this.tone(240, 1.4, 0.1, 'sine'); break;
+      case 'meteor': this.oneShot(this.brown, 'lowpass', 500, 0.5, 1.5, { sweep: 80 }); break;
+      case 'hammer': this.oneShot(this.brown, 'lowpass', 200, 1.4, 0.6); this.oneShot(this.noise, 'bandpass', 500, 0.6, 0.5, { sweep: 120 }); break;
+      default: this.launch();
+    }
+  }
   impact(intensity) { this.oneShot(this.brown, 'lowpass', 400, Math.min(1.2, intensity * 0.12), 0.35); this.oneShot(this.noise, 'bandpass', 1800, Math.min(0.3, intensity * 0.02), 0.12); }
   launch() { this.oneShot(this.noise, 'bandpass', 600, 0.6, 0.7, { sweep: 3000 }); this.oneShot(this.brown, 'lowpass', 300, 0.6, 0.4); }
   pickup() { this.tone(523, 0.15, 0.12, 'triangle'); this.tone(784, 0.25, 0.12, 'triangle', 0.08); this.tone(1046, 0.35, 0.1, 'triangle', 0.16); }

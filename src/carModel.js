@@ -253,6 +253,41 @@ export function buildCar(paint) {
   const paintMat = new THREE.MeshPhysicalMaterial({
     color: paint.color, metalness: paint.metal, roughness: paint.rough, clearcoat: 1, clearcoatRoughness: 0.04, vertexColors: true, envMapIntensity: 1.25,
   });
+  // skins: two colours + a pattern drawn in the paint shader (pattern 0 = plain paint, unchanged)
+  const skinU = { uSkinA: { value: new THREE.Color() }, uSkinB: { value: new THREE.Color() }, uSkinPat: { value: 0 }, uSkinGlow: { value: 0 }, uSkinTime: { value: 0 } };
+  paintMat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, skinU);
+    sh.vertexShader = 'varying vec3 vSkinPos;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkinPos = position;');
+    sh.fragmentShader = `varying vec3 vSkinPos; uniform vec3 uSkinA; uniform vec3 uSkinB; uniform int uSkinPat; uniform float uSkinGlow; uniform float uSkinTime;
+      float skH(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
+      float skN(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(skH(i),skH(i+vec3(1,0,0)),f.x),mix(skH(i+vec3(0,1,0)),skH(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(skH(i+vec3(0,0,1)),skH(i+vec3(1,0,1)),f.x),mix(skH(i+vec3(0,1,1)),skH(i+vec3(1,1,1)),f.x),f.y),f.z); }
+      vec3 skHue(float h){ return clamp(abs(mod(h*6.0+vec3(0,4,2),6.0)-3.0)-1.0,0.0,1.0); }
+      ` + sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      vec3 skinGlow = vec3(0.0);
+      if (uSkinPat > 0) {
+        vec3 p = vSkinPos; float m = 0.0; float t = uSkinTime; vec3 col = vec3(0.0); bool direct = false;
+        if (uSkinPat == 1) m = 0.0;
+        else if (uSkinPat == 2) m = step(abs(abs(p.x) - 0.16), 0.07) * step(0.05, p.y);
+        else if (uSkinPat == 3) m = step(0.5, fract(p.z * 1.6 + 0.3 * sin(p.y * 8.0 + p.x * 3.0)));
+        else if (uSkinPat == 4) m = mod(floor(p.x * 5.0) + floor(p.z * 5.0) + floor(p.y * 5.0), 2.0);
+        else if (uSkinPat == 5) m = smoothstep(2.2, -2.2, p.z);
+        else if (uSkinPat == 6) m = step(0.5, skN(p * 3.5));
+        else if (uSkinPat == 7) { skinGlow = uSkinB * uSkinGlow * (step(0.9, fract(p.z * 2.5 - t * 0.8)) + step(0.93, fract(abs(p.x) * 6.0)) * 0.5); }
+        else if (uSkinPat == 8) { col = skHue(fract(p.z * 0.15 + p.y * 0.2 + t * 0.1)); direct = true; skinGlow = col * uSkinGlow * 0.3; }
+        else if (uSkinPat == 9) m = smoothstep(-0.3, 0.6, p.y);
+        else if (uSkinPat == 10) { float r = skH(vec3(floor(p.y * 18.0), floor(t * 8.0), 0.0)); m = step(0.6, r); skinGlow = uSkinB * uSkinGlow * step(0.92, r); }
+        else if (uSkinPat == 11) { m = 0.5 + 0.5 * sin(p.y * 40.0 - t * 4.0); skinGlow = mix(uSkinA, uSkinB, m) * uSkinGlow * 0.6; }
+        else if (uSkinPat == 12) { float n = skN(p * 3.0 + vec3(0.0, -t * 0.3, 0.0)); m = 0.0; skinGlow = uSkinB * uSkinGlow * smoothstep(0.55, 0.75, n) * (0.7 + 0.3 * sin(t * 3.0)); }
+        else if (uSkinPat == 13) { float colm = floor(p.x * 18.0 + p.z * 0.0); float drop = fract(p.y * 1.5 + t * (0.5 + skH(vec3(colm, floor(p.z * 6.0), 1.0))) ); m = 0.0; skinGlow = uSkinB * uSkinGlow * step(0.85, drop) * step(0.4, skH(vec3(floor(p.y * 30.0), colm, floor(p.z * 6.0)))); }
+        else if (uSkinPat == 14) { float st = step(0.985, skH(floor(p * 40.0))); m = smoothstep(0.4, 0.8, skN(p * 2.0 + t * 0.05)) * 0.6; skinGlow = vec3(st) * uSkinGlow + uSkinB * m * 0.4 * uSkinGlow; }
+        if (!direct) col = mix(uSkinA, uSkinB, m);
+        diffuseColor.rgb *= col;
+      }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += skinGlow;');
+  };
   const mats = {
     paint: paintMat,
     glass: new THREE.MeshPhysicalMaterial({ color: '#0b0e13', metalness: 0.2, roughness: 0.04, transparent: true, opacity: 0.86, envMapIntensity: 1.8, clearcoat: 1 }),
@@ -468,7 +503,16 @@ export function buildCar(paint) {
     look: { wheels: 'aero', wing: 'duck' },
     lights: 0,           // headlight level from the time of day (0 day .. 1 night)
     broken: {},          // damaged parts: mirrorL, mirrorR, spoiler, headL, headR, tail
-    setPaint(p) { paintMat.color.set(p.color); paintMat.metalness = p.metal; paintMat.roughness = p.rough; paintMat.clearcoat = p.clearcoat ?? 1; },
+    setPaint(p) { if (model.skin) return; paintMat.color.set(p.color); paintMat.metalness = p.metal; paintMat.roughness = p.rough; paintMat.clearcoat = p.clearcoat ?? 1; },
+    skin: null,
+    // skin replaces the paint; null goes back to plain paint
+    setSkin(s, paint) {
+      model.skin = s;
+      if (!s) { skinU.uSkinPat.value = 0; if (paint) model.setPaint(paint); return; }
+      paintMat.color.set('#ffffff'); paintMat.metalness = s.metal; paintMat.roughness = s.rough; paintMat.clearcoat = 1;
+      skinU.uSkinA.value.set(s.a); skinU.uSkinB.value.set(s.b); skinU.uSkinPat.value = s.pattern; skinU.uSkinGlow.value = s.glow || 0;
+    },
+    tickSkin(t) { skinU.uSkinTime.value = t; },
     // garage cosmetics
     setLook(look) {
       Object.assign(model.look, look);
