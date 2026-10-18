@@ -170,6 +170,7 @@ export function build(world) {
       }
       obb(mx, FH / 2, mz, len / 2, FH / 2, 0.3, phi, 'metal', GRIP.metal);
     }
+    flush(L.fence, fenceMat, false, false);
   });
 
   // ---------- entrance gantry with the neon sign ----------
@@ -400,8 +401,8 @@ export function build(world) {
     }
     mesh.castShadow = true; mesh.receiveShadow = true;
     scene.add(mesh);
-    obb(344.65, 0.75, -655.4, 1.25, 0.75, 1.2, 0, 'rubber', 0.9);
-    obb(660.65, 0.75, -345.4, 1.25, 0.75, 1.2, 0, 'rubber', 0.9);
+    obb(344.65, 0.75, -655.4, 1.25, 0.75, 1.2, 0, 'concrete', 0.9);
+    obb(660.65, 0.75, -345.4, 1.25, 0.75, 1.2, 0, 'concrete', 0.9);
   });
 
   // ---------- destructibles (world.d, same API use as buildWeaponsRange) ----------
@@ -546,10 +547,6 @@ export function build(world) {
 
   // ---------- merge static decoration ----------
   safe('flush', () => {
-    flush(L.fence, L.fenceMat || (L.fence.length ? null : null) || fenceMatFallback(), false, false);
-  });
-  function fenceMatFallback() { return std({ color: '#b8c0c8', roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.25, depthWrite: false }); }
-  safe('flush2', () => {
     flush(L.dark, darkSteel, true, true);
     flush(L.yellow, craneYellow, true, true);
     flush(L.concrete, concrete, true, true);

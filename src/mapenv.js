@@ -225,6 +225,7 @@ function applyInner(env, ctx) {
       } else {
         if (zen && U.zen) U.zen.value.set(zen[0], zen[1], zen[2]);
         if (hor && U.hor) U.hor.value.set(hor[0], hor[1], hor[2]);
+        if (env.stars && U.night) U.night.value = 0;   // one star layer: ours, not the shader's as well
       }
     }
     // fog
