@@ -104,5 +104,6 @@ Tests:
 - In the desktop app (`node tools/package.mjs --linux-only` first, then prefix with `APP=1 xvfb-run -a`):
   `tools/play-test.mjs out/`, `tools/v2-test.mjs out/` (screenshots of every v2 feature),
   `tools/hack-test.mjs out/` (`HACK_CODE=...`, or `HACK_UNLOCK=1` to skip the code screen).
-- Updater: `xvfb-run -a node tools/updater-test.mjs out/` (needs `node tools/package.mjs --linux`), and after
+- Updater: `xvfb-run -a node tools/updater-test.mjs out/` (needs `node tools/package.mjs --linux`; covers the update
+  window at launch, an update arriving while playing, rollback, corrupted downloads, offline and shell updates), and after
   `release.mjs`: `xvfb-run -a node tools/release-check.mjs out/` (an app on the previous version installs the new one).
