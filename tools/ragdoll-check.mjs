@@ -1,0 +1,20 @@
+// Quick headless check of the ragdoll physics (no browser): node tools/ragdoll-check.mjs
+const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+const THREE = await import('three');
+const { buildHeights } = await import('../src/terrain.js');
+buildHeights();
+const { Ragdolls } = await import('../src/ragdoll.js');
+const scene = new THREE.Scene();
+const fx = { smoke: { spawn() {} }, fire: { spawn() {} } };
+const R = new Ragdolls(scene, fx);
+const d = R.spawn(new THREE.Vector3(640, 0, -620), 0, 'crash'), b = R.spawn(new THREE.Vector3(650, 0, -620), 0, 'boss');
+let ko = 0; R.onReward = (t, c) => { ko++; console.log('reward', t, c); };
+R.explode(d.pelvis.clone().add(new THREE.Vector3(0, 0.3, 0.3)), 9, 1);
+const h = R.hit(b.p[b.segs[1].ib].clone(), 0.3); if (h) h.applyImpulse(new THREE.Vector3(0, 0, 960), b.p[b.segs[1].ib]);
+for (let i = 0; i < 300; i++) R.update(1 / 60, null);
+const fin = (x) => x.p.every(v => Number.isFinite(v.x + v.y + v.z));
+console.log('crash hp', d.hp.toFixed(0), 'limbs off', d.limbs, 'finite', fin(d), 'state', d.state, 'pelvis y', d.pelvis.y.toFixed(2));
+console.log('boss hp', b.hp.toFixed(0), 'limbs off', b.limbs, 'finite', fin(b), 'pools', R.pools.length);
+const veh = { pos: d.pelvis.clone().add(new THREE.Vector3(0, 0.4, -1)), vel: new THREE.Vector3(0, 0, 25), quat: new THREE.Quaternion() };
+R.reset(); R.update(1 / 60, veh); console.log('after reset+ram: hp', d.hp.toFixed(0), 'state', d.state, 'finite', fin(d));

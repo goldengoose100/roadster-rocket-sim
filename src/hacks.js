@@ -37,7 +37,7 @@ const GRAVITY = [['Earth', 1], ['Mars', 0.38], ['Moon', 0.165], ['Zero-G', 0], [
 const TOD = [['Day', 'day'], ['Golden hour', 'golden'], ['Sunset', 'sunset'], ['Night', 'night']];
 import { WEAPON_LIST } from './weapons.js';
 const GUNS = WEAPON_LIST.map(w => [w.name, w.id]);
-const SPAWNS = [['Crate tower', 'crates'], ['Concrete tower', 'tower'], ['Brick wall', 'wall'], ['Barrel pile', 'barrels'], ['Car', 'car'], ['Semi', 'semi'], ['Jump ramp', 'ramp'], ['Pace car (slipstream)', 'pace']];
+const SPAWNS = [['Crate tower', 'crates'], ['Concrete tower', 'tower'], ['Brick wall', 'wall'], ['Barrel pile', 'barrels'], ['Car', 'car'], ['Semi', 'semi'], ['Jump ramp', 'ramp'], ['Pace car (slipstream)', 'pace'], ['Ragdoll dummy', 'doll']];
 
 // every option in the menu
 const DEFS = [

@@ -1,11 +1,13 @@
 {
-  "version": "2.3.0",
-  "file": "game-2.3.0.html",
-  "sha256": "c1b167965f6167307a2026b4106444c70705b6bcc08584e4b65eff0bdffbd63d",
-  "size": 1343625,
+  "version": "2.4.0",
+  "file": "game-2.4.0.html",
+  "sha256": "9024ba8ce46f602a6a0641bb76e33422c3e904b63140d9c9a6acaafab45ef927",
+  "size": 1366693,
   "minShell": "1.1.0",
   "date": "2026-10-18",
   "notes": [
-    "New secret Good Luck menu (needs its code): silly cars (banana, hot dog, rubber duck, watermelon), a skin swapper for all 87 skins and silly mods like monster wheels, googly eyes, fart boost and a bouncy car"
+    "New: ragdoll dummies in the Weapons Range! 7 kinds with HP bars, including a giant BOSS DUMMY",
+    "Limbs come off where you hit them; headshots knock them out. Blood can be switched off in the pause menu",
+    "Earn credits for every knockout; dummies respawn after 15 seconds"
   ]
 }

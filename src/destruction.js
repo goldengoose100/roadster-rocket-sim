@@ -694,7 +694,7 @@ export class Destruction {
       if (!arr) continue;
       for (const b of arr) if (b.penetrate(p, _n) > 0 || b.pos.distanceToSquared(p) < (Math.min(b.half.x, b.half.y, b.half.z) + r) ** 2) return b;
     }
-    return null;
+    return this.extraHit ? this.extraHit(p, r) : null;   // ragdolls
   }
 
   liveCount() { let a = 0, s = 0; for (const b of this.bodies) { if (!b.alive) continue; if (b.sleeping) s++; else a++; } return { awake: a, asleep: s }; }

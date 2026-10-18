@@ -11,6 +11,14 @@ that actually runs out, and buildings that collapse block by block.
 
 ![Start screen](docs/start.png)
 
+## New in 2.4
+
+- **Ragdoll dummies** in the Weapons Range: crash-test dummy, wooden training dummy, robot, mannequin, scarecrow,
+  clown and a giant BOSS DUMMY, each with an HP bar. Every body part has its own health, so limbs come off at the
+  joint nearest the hit (headshots knock them out). Blood (oil for the robot, straw, splinters), with a Blood
+  on/off switch in the pause menu. Credits for every knockout; dummies respawn after 15 s, Backspace resets them,
+  and the mod menu can spawn more.
+
 ## New in 2.3
 
 - **Good Luck menu** (secret, needs its code): unlock everything, wear any of the 87 skins, turn the car into a

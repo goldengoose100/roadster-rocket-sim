@@ -14,6 +14,7 @@ import { buildCar } from './carModel.js';
 import { World, makeSedan, makeSemi } from './world.js';
 import { Hacks } from './hacks.js';
 import { Luck } from './luck.js';
+import { Ragdolls } from './ragdoll.js';
 import { Destruction } from './destruction.js';
 import { Effects } from './effects.js';
 import { Weapons, WEAPON_LIST } from './weapons.js';
@@ -47,7 +48,7 @@ async function boot(hotData = {}) {
   window.__booted = true;
   try { await Promise.race([document.fonts.load('800 40px "Barlow Condensed"'), new Promise(r => setTimeout(r, 1500))]); } catch (_) { /* fonts optional */ }
 
-  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1, physics: '2' }, store.get('settings', {}), hotData.settings || {});
+  const settings = Object.assign({ trim: 'rocket', paint: 'red', sandbox: false, units: 'mph', volume: 0.7, quality: 2, assist: true, steerSens: 1, physics: '2', blood: true }, store.get('settings', {}), hotData.settings || {});
   const profile = new Profile(store);
   // older saves kept the paint in settings
   if (!store.get('garage', null) && settings.paint) profile.d.setup.paint = settings.paint;
@@ -257,6 +258,7 @@ async function boot(hotData = {}) {
   destruction.onExplode = (pos, radius, power, kind) => {
     effects.explosion(pos, radius, power);
     if (luck) luck.onExplode(pos, radius);
+    ragdolls.explode(pos, radius, power);
     const dist = camera.position.distanceTo(pos);
     _tmp.copy(pos).sub(camera.position).normalize();
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
@@ -505,6 +507,7 @@ async function boot(hotData = {}) {
     for (const r of spawnedRamps) { r.alive = false; r.mesh.parent && r.mesh.parent.remove(r.mesh); }
     spawnedRamps.length = 0;
     for (const d of effects.decals) d.visible = false;
+    ragdolls.reset();
     hud.toast('All targets rebuilt', 'good');
   };
 
@@ -551,6 +554,14 @@ async function boot(hotData = {}) {
 
   // ---------- credits, crash damage, repair ----------
   const rewards = new Rewards(profile, (text, cr) => { hud.toast(`${text} · +${cr} CR`, 'good', 2600); sound.ring(); });
+  // ragdoll target dummies in the Weapons Range (2.4)
+  const ragdolls = new Ragdolls(scene, effects, { blood: settings.blood !== false });
+  ragdolls.populate();
+  ragdolls.onReward = (text, cr) => { const got = profile.earn(cr); if (got) { hud.toast(`${text} · +${got} CR`, 'good', 2600); sound.ring(); } };
+  destruction.extraHit = (p, r) => ragdolls.hit(p, r);
+  const setBlood = (on) => { settings.blood = on; saveSettings(); ragdolls.setBlood(on); $('bl-on').setAttribute('aria-pressed', String(on)); $('bl-off').setAttribute('aria-pressed', String(!on)); };
+  $('bl-on').onclick = () => setBlood(true); $('bl-off').onclick = () => setBlood(false);
+  setBlood(settings.blood !== false);
   const needsRepair = () => vehicle.damage.isDamaged(vehicle) || vehicle.wheels.some(w => w.wear > 0.02) || vehicle.thrusters.some(t => t.health < 1);
   const _ev = new THREE.Vector3(), _ev2 = new THREE.Vector3();
   const toWorld = (lp, out) => out.copy(lp).applyQuaternion(vehicle.quat).add(vehicle.pos);
@@ -1002,6 +1013,8 @@ async function boot(hotData = {}) {
       paceCar.spawn(vehicle, hacks.v.paceSpeed || 120);
       hud.toast(`Pace car at ${hacks.v.paceSpeed || 120} mph · tuck in behind it to draft`, 'ice', 2600);
       return;
+    } else if (kind === 'doll') {
+      ragdolls.spawn(p, yaw + Math.PI);
     } else if (kind === 'ramp') {
       const w = world.wedge(p.x, p.z, yaw, 6, 20, 4.5, { noStripes: true });
       spawnedRamps.push(w);
@@ -1052,7 +1065,7 @@ async function boot(hotData = {}) {
   });
 
   // shown once after updating to that exact version (a bugfix release without an entry shows nothing)
-  const WHATS_NEW = { '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a rubber duck and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
+  const WHATS_NEW = { '2.4.0': ['Ragdoll dummies in the Weapons Range: 7 kinds with HP bars, including a giant BOSS', 'Limbs come off where you hit them (Blood can be turned off in the pause menu)', 'Earn credits for every knockout'], '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a rubber duck and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {
@@ -1156,6 +1169,7 @@ async function boot(hotData = {}) {
         G.physMs += (performance.now() - t0 - G.physMs) * 0.1;
         G.time += sdt;
         weapons.update(sdt);
+        ragdolls.update(sdt, G.state === 'play' ? vehicle : null);
         if (G.state === 'play') gameplay(sdt);
         destruction.sync();
       } else { input.clicks = 0; }
@@ -1241,9 +1255,9 @@ async function boot(hotData = {}) {
     THREE, vehicle, destruction, weapons, world, model, effects, rig, G, settings, teleports, hacks, setTimeOfDay,
     profile, garageUI, showroom, openGarage, rewards, paceCar, env, dmgVis, looseWheels, setPhysics,
     startGame, teleport: (i) => teleport(teleports.find(t => t.key === i) || teleports[0]),
-    step(n, c) { controls = Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false, boost: false, lift: false, descend: false, roll: 0, fire: false }, c || {}); for (let i = 0; i < n; i++) stepOnce(); weapons.update(n * DT); destruction.sync(); gameplay(n * DT); },
+    step(n, c) { controls = Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false, boost: false, lift: false, descend: false, roll: 0, fire: false }, c || {}); for (let i = 0; i < n; i++) stepOnce(); weapons.update(n * DT); ragdolls.update(n * DT, vehicle, 100000); destruction.sync(); gameplay(n * DT); },
     weaponList: WEAPON_LIST, skinIds: SKINS.map(s => s.id),
-    get luck() { return luck; },
+    get luck() { return luck; }, ragdolls,
     fireAt(x, y, z) { if (!weapons.equipped) weapons.equip(); return weapons.tryFire(model, vehicle, new THREE.Vector3(x, y, z)); },
     setCam(m) { rig.mode = m; rig.snap(); },
     renderInfo() { renderer.info.autoReset = false; renderer.info.reset(); const t = performance.now(); renderer.render(scene, camera); const ms = performance.now() - t; const r = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ms }; renderer.info.autoReset = true; let meshes = 0; scene.traverse(o => { if (o.isMesh) meshes++; }); r.meshes = meshes; return r; },
