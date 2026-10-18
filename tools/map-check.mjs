@@ -344,7 +344,11 @@ await step('flats are flat', () => {
 });
 await step('drag strip terrain', () => {
   let notFlat = 0, notPaved = 0, n = 0, worst = 0, wAt = '', pAt = '';
-  for (let x = DRAG.x0; x <= DRAG.x1; x += 2) for (let z = DRAG.z0; z <= DRAG.z1; z += 2) {
+  const e = 0.05;   // a pad that ends exactly on the rectangle's edge counts (sdf = 0 there is "not paved")
+  const xs = [], zs = [];
+  for (let x = DRAG.x0; x <= DRAG.x1; x += 2) xs.push(Math.min(DRAG.x1 - e, Math.max(DRAG.x0 + e, x)));
+  for (let z = DRAG.z0; z <= DRAG.z1; z += 2) zs.push(Math.min(DRAG.z1 - e, Math.max(DRAG.z0 + e, z)));
+  for (const x of xs) for (const z of zs) {
     n++;
     const h = T.heightAt(x, z);
     if (!(Math.abs(h) < 0.05)) { notFlat++; if (!(Math.abs(h) <= Math.abs(worst))) { worst = h; wAt = `(${x}, ${z})`; } }
