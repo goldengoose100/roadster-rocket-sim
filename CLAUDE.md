@@ -8,6 +8,8 @@ The owner is not a programmer: explain plainly, confirm plans before big changes
 - The mod menu's access code must never appear in the repo: not in code, tests, commits or docs.
   `src/hacks.js` stores only its SHA-256. `tools/hack-test.mjs` reads it from the `HACK_CODE` env var;
   ask the owner for it if you need to run that test.
+- The Good Luck menu's code (key 0, added in 2.3) follows the same rule: `src/luck.js` stores only its SHA-256,
+  `tools/luck-test.mjs` reads it from the `LUCK_CODE` env var (or `LUCK_UNLOCK=1` skips the prompt).
 - Keep gameplay identical between versions unless a change was asked for.
 
 ## Shipping a game update (what installed apps receive)

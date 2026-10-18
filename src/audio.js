@@ -145,6 +145,17 @@ export class Sound {
   ring() { this.tone(880, 0.2, 0.12, 'sine'); this.tone(1320, 0.3, 0.1, 'sine', 0.06); }
   record() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.3, 0.1, 'triangle', i * 0.07)); }
   whoosh() { this.oneShot(this.noise, 'bandpass', 500, 0.5, 0.9, { sweep: 2600 }); }
+  // Good Luck menu silly sounds
+  sweep(f0, f1, dur, gain, type = 'sine', when = 0) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime + when;
+    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  honk() { this.sweep(520, 760, 0.16, 0.16, 'square'); this.sweep(760, 470, 0.22, 0.16, 'square', 0.17); }
+  fart() { const p = 0.8 + Math.random() * 0.5; this.sweep(95 * p, 55 * p, 0.42, 0.22, 'sawtooth'); this.oneShot(this.brown, 'lowpass', 260 * p, 0.5, 0.4, { sweep: 90 }); }
+  boing() { this.sweep(180, 620, 0.28, 0.14, 'sine'); this.sweep(240, 900, 0.22, 0.05, 'triangle', 0.03); }
   click() { this.tone(1400, 0.05, 0.05, 'square'); }
   warn() { this.tone(440, 0.12, 0.08, 'square'); this.tone(440, 0.12, 0.08, 'square', 0.18); }
 }

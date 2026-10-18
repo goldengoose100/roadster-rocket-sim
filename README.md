@@ -11,6 +11,13 @@ that actually runs out, and buildings that collapse block by block.
 
 ![Start screen](docs/start.png)
 
+## New in 2.3
+
+- **Good Luck menu** (secret, needs its code): unlock everything, wear any of the 87 skins, turn the car into a
+  banana, hot dog, rubber duck, toilet, shopping cart, couch, cheese wedge, pizza slice, watermelon, bathtub,
+  giant sneaker or burger (looks only: it drives the same), and silly mods: monster wheels, tiny car, googly
+  eyes, party hat, wobbly jelly car, rainbow trail, confetti explosions, fart boost, clown horn and bouncy car.
+
 ## New in 2.2
 
 - **Skin cases** (Garage → Skins): a Street Case (1,500 CR) and an Elite Case (5,000 CR) with a spinning reel.
@@ -117,6 +124,7 @@ Tests:
   print exactly the 1.1.5 numbers.
 - In the desktop app (`node tools/package.mjs --linux-only` first, then prefix with `APP=1 xvfb-run -a`):
   `tools/play-test.mjs out/`, `tools/v2-test.mjs out/` (screenshots of every v2 feature),
-  `tools/hack-test.mjs out/` (`HACK_CODE=...`, or `HACK_UNLOCK=1` to skip the code screen).
+  `tools/hack-test.mjs out/` (`HACK_CODE=...`, or `HACK_UNLOCK=1` to skip the code screen),
+  `tools/luck-test.mjs out/` (`LUCK_CODE=...`, or `LUCK_UNLOCK=1` to skip the code prompt).
 - Updater: `xvfb-run -a node tools/updater-test.mjs out/` (needs `node tools/package.mjs --linux`), and after
   `release.mjs`: `xvfb-run -a node tools/release-check.mjs out/` (an app on the previous version installs the new one).

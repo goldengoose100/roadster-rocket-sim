@@ -13,6 +13,7 @@ import { Vehicle } from './vehicle.js';
 import { buildCar } from './carModel.js';
 import { World, makeSedan, makeSemi } from './world.js';
 import { Hacks } from './hacks.js';
+import { Luck } from './luck.js';
 import { Destruction } from './destruction.js';
 import { Effects } from './effects.js';
 import { Weapons, WEAPON_LIST } from './weapons.js';
@@ -255,6 +256,7 @@ async function boot(hotData = {}) {
   const _tmp = new THREE.Vector3();
   destruction.onExplode = (pos, radius, power, kind) => {
     effects.explosion(pos, radius, power);
+    if (luck) luck.onExplode(pos, radius);
     const dist = camera.position.distanceTo(pos);
     _tmp.copy(pos).sub(camera.position).normalize();
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
@@ -359,12 +361,13 @@ async function boot(hotData = {}) {
   }
   syncPaints();
   // looks: garage cosmetics, with mod-menu visual overrides on top; preview = parts being tried on
-  let hacks = null;
+  let hacks = null, luck = null;
   const vaporOf = (hex) => hex === '#eef7ff' ? [0.93, 0.97, 1.0] : (c => [c.r, c.g, c.b])(new THREE.Color(hex));
   const applyLook = (preview = {}) => {
     const L = Object.assign(profile.look(), preview);
     const hv = hacks && hacks.unlocked ? hacks.v : null;
-    const skin = preview.paint !== undefined ? null : preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
+    const lucky = luck ? luck.skinOverride() : undefined;   // Good Luck skin swapper wins over the garage
+    const skin = lucky !== undefined ? lucky : preview.paint !== undefined ? null : preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
     if (hv && hv.paint) { model.setSkin(null); model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); }
     else if (skin && !(hv && (hv.rainbow || hv.disco))) model.setSkin(skin);
     else model.setSkin(null, findItem('paint', L.paint));
@@ -525,7 +528,8 @@ async function boot(hotData = {}) {
       if (code === 'KeyH') { setOverlay(G.overlay === 'help' ? null : 'help'); continue; }
       if (code === 'KeyM') { setOverlay(G.overlay === 'map' ? null : 'map'); continue; }
       if (G.overlay) continue;
-      if (code === 'Minus' || code === 'NumpadSubtract') continue; // handled instantly below
+      if (code === 'Minus' || code === 'NumpadSubtract' || code === 'Digit0' || code === 'Numpad0') continue; // handled instantly below
+      if (luck.key(code)) continue;
       if (hacks.key(code)) continue;
       if (code === 'KeyQ' || code === 'KeyE') { G.rollTap = code === 'KeyE' ? 1 : -1; continue; }
       if ((code === 'Tab' || code === 'ShiftTab') && weapons.equipped) { weapons.toggleMode(code === 'ShiftTab'); const w = weapons.weapon; hud.toast(`${w.name}${w.tip ? ' · ' + w.tip : w.id === 'rail' ? ' · pierces buildings' : ''} · Tab next`, 'warn', 1800); continue; }
@@ -1009,12 +1013,33 @@ async function boot(hotData = {}) {
   };
   const instantRepair = () => { vehicle.repairAll(); hud.toast('Instant repair', 'ice', 1200); };
   const onCheats = () => { applyTrim(); applyLook(); profile.onChange(); if (G.overlay === 'garage') garageUI.render(); };
+  // garage cheats can come from the mod menu or the Good Luck menu ("unlock everything")
+  const syncCheats = () => {
+    const h = hacks && hacks.unlocked ? hacks.v : {}, l = luck && luck.unlocked ? luck.v : {};
+    profile.cheats.unlimited = !!h.unlimitedCredits;
+    profile.cheats.unlockAll = !!(h.unlockAll || l.unlockAll);
+    profile.cheats.unlockSkins = !!(h.unlockSkins || l.unlockAll);
+    profile.cheats.devSkins = !!(h.devSkins || l.unlockAll);
+  };
   hacks = new Hacks({
     vehicle, weapons, destruction, effects, model, rig, G, sound, world,
     toast: (m, k, ms) => hud.toast(m, k, ms),
     setTimeOfDay, aimPoint, teleportTo, nuke, spawn: spawnThing, rebuild: () => rebuild(), setXray, setFreeCam, setPhoto, applyLook,
-    profile, onCheats, repair: instantRepair,
+    profile, onCheats, syncCheats, repair: instantRepair,
     onSkins: () => { applyLook(); if (G.overlay === 'garage') garageUI.render(); },
+  });
+  luck = new Luck({
+    vehicle, model, rig, effects, sound, profile, applyLook, syncCheats, onCheats,
+    toast: (m, k, ms) => hud.toast(m, k, ms),
+    boosting: () => G.state === 'play' && controls.boost && vehicle.rear.length > 0 && vehicle.thrustN > 1000,
+  });
+  // "0" opens the Good Luck menu (its own code), handled instantly like the mod menu
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Digit0' && e.code !== 'Numpad0') return;
+    if (G.state !== 'play' || G.overlay || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+    e.preventDefault();
+    if (!e.repeat) luck.toggle();
   });
 
   // "-" opens the mod menu immediately (not on the next frame) so nothing typed leaks into the game
@@ -1027,7 +1052,7 @@ async function boot(hotData = {}) {
   });
 
   // shown once after updating to that exact version (a bugfix release without an entry shows nothing)
-  const WHATS_NEW = { '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
+  const WHATS_NEW = { '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a toilet and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {
@@ -1146,7 +1171,8 @@ async function boot(hotData = {}) {
       model.tickSkin(performance.now() / 1000);
       looseWheels.update(running ? dt * G.timeScale : 0);
 
-      if (!inGarage) updateCarModel(dt);
+      if (!inGarage) { updateCarModel(dt); luck.update(dt, running && G.state === 'play'); }
+      else model.group.scale.setScalar(rig.carScale || 1);   // the showroom always shows the full-size car
       if (running) { emitVehicleFX(dt); envFX(dt * G.timeScale); }
       effects.update(running ? dt * G.timeScale : 0);
       world.update(G.time);
@@ -1217,6 +1243,7 @@ async function boot(hotData = {}) {
     startGame, teleport: (i) => teleport(teleports.find(t => t.key === i) || teleports[0]),
     step(n, c) { controls = Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false, boost: false, lift: false, descend: false, roll: 0, fire: false }, c || {}); for (let i = 0; i < n; i++) stepOnce(); weapons.update(n * DT); destruction.sync(); gameplay(n * DT); },
     weaponList: WEAPON_LIST, skinIds: SKINS.map(s => s.id),
+    get luck() { return luck; },
     fireAt(x, y, z) { if (!weapons.equipped) weapons.equip(); return weapons.tryFire(model, vehicle, new THREE.Vector3(x, y, z)); },
     setCam(m) { rig.mode = m; rig.snap(); },
     renderInfo() { renderer.info.autoReset = false; renderer.info.reset(); const t = performance.now(); renderer.render(scene, camera); const ms = performance.now() - t; const r = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ms }; renderer.info.autoReset = true; let meshes = 0; scene.traverse(o => { if (o.isMesh) meshes++; }); r.meshes = meshes; return r; },

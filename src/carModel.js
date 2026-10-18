@@ -513,6 +513,15 @@ export function buildCar(paint) {
       skinU.uSkinA.value.set(s.a); skinU.uSkinB.value.set(s.b); skinU.uSkinPat.value = s.pattern; skinU.uSkinGlow.value = s.glow || 0;
     },
     tickSkin(t) { skinU.uSkinTime.value = t; },
+    // Good Luck menu: a silly body (banana, toilet...) in place of the car body; null = the real car
+    sillyBody: null,
+    setSilly(g) {
+      if (model.sillyBody) group.remove(model.sillyBody);
+      model.sillyBody = g || null;
+      if (g) group.add(g);
+      body.visible = canopy.visible = under.visible = !g;
+      model.refreshParts();
+    },
     // garage cosmetics
     setLook(look) {
       Object.assign(model.look, look);
@@ -521,15 +530,16 @@ export function buildCar(paint) {
     },
     // show / hide parts after damage or repair, and dim broken lights
     refreshParts() {
-      const b = model.broken;
-      for (const k in wings) wings[k].visible = k === model.look.wing && !b.spoiler;
-      mirrors[0].visible = !b.mirrorL; mirrors[1].visible = !b.mirrorR; splitter.visible = !b.splitter;
+      const b = model.broken, s = !!model.sillyBody;
+      for (const k in wings) wings[k].visible = !s && k === model.look.wing && !b.spoiler;
+      mirrors[0].visible = !s && !b.mirrorL; mirrors[1].visible = !s && !b.mirrorR; splitter.visible = !s && !b.splitter;
+      tail.visible = !s;
       model.updateLights();
     },
     updateLights() {
       const b = model.broken, on = model.lights ? 6 : 3.2;
       mats.headL.emissiveIntensity = b.headL ? 0 : on; mats.headR.emissiveIntensity = b.headR ? 0 : on;
-      heads[0].visible = !b.headL; heads[1].visible = !b.headR;
+      heads[0].visible = !b.headL && !model.sillyBody; heads[1].visible = !b.headR && !model.sillyBody;
       headlights[0].intensity = b.headL ? 0 : model.lights * 320; headlights[1].intensity = b.headR ? 0 : model.lights * 320;
     },
     // cracked canopy glass after a hard hit
