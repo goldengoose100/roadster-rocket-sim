@@ -1,12 +1,15 @@
 {
-  "version": "2.1.0",
-  "file": "game-2.1.0.html",
-  "sha256": "0cb5c356439cde91b082eecc202a8dacaf3e682d9954d516826a9c4a73a080d3",
-  "size": 1267399,
+  "version": "2.2.0",
+  "file": "game-2.2.0.html",
+  "sha256": "8271427a8dcecad9ef08c71d797a8ecf268bc5e4e43a16abef347526483309e5",
+  "size": 1301851,
   "minShell": "1.1.0",
-  "date": "2026-10-17",
+  "date": "2026-10-18",
   "notes": [
-    "New: railgun! Pick up the launcher, press Tab to switch, and fire a beam straight through buildings",
-    "Tab switches back to rockets; the railgun recharges in 1.5 s"
+    "New: skin cases! Garage → Skins has a Street Case and an Elite Case with 37 skins in 5 rarities (grey, green, blue, purple, gold)",
+    "14 new guns: minigun, shotgun, grenades, flamethrower, laser, plasma, sniper, mines, cluster bomb, black hole, tesla coil, orbital laser, meteor shower and gravity hammer",
+    "Tab / Shift+Tab switches guns; hold the mouse for auto-fire",
+    "Mod menu: weapon cheats, Armageddon, +100K credits and 50 secret Dev skins",
+    "New in-game update screen and a What's new screen"
   ]
 }
