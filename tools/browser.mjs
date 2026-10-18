@@ -18,7 +18,7 @@ async function openApp({ width, height, quality }) {
   const app = await _electron.launch({ executablePath: APP_EXE, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
     env: { ...process.env, XDG_CONFIG_HOME: home, ROADSTER_UPDATE_URL: 'http://localhost:9/' } });
   const page = await app.firstWindow();
-  page.setDefaultTimeout(180000);
+  page.setDefaultTimeout(600000);   // swiftshader on a small machine can take minutes per frame
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push('[pageerror] ' + e.message));
