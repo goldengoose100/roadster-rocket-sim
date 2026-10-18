@@ -3,13 +3,19 @@
 An unofficial, fan-made 3D physics sim of the new Tesla Roadster (revealed Oct 15, 2026) and its
 cold-gas thruster package, as a Windows desktop app. Not affiliated with Tesla or SpaceX.
 
-**[⬇ Download the latest version for Windows](https://github.com/goldengoose100/roadster-rocket-sim/releases/latest)**
+**[⬇ Download v2.1.0 for Windows](https://github.com/goldengoose100/roadster-rocket-sim/releases/download/v2.1.0/Roadster-Rocket-Sim-Windows-v2.1.0.zip)**
+([all versions](https://github.com/goldengoose100/roadster-rocket-sim/releases))
 
 Drive it, fly it on 10 thrusters, ride walls with fan suction, loop the loop, and blow up a whole village
 with roof-mounted rockets. Real physics: suspension, tire slip, 4,700 kg of fan downforce, 250 kg of air
 that actually runs out, and buildings that collapse block by block.
 
 ![Start screen](docs/start.png)
+
+## New in 2.1
+
+- **Railgun**: pick up a launcher at the Weapons Range and press **Tab** to switch between rockets and the railgun.
+  It fires an instant beam straight through buildings (click or B) and recharges in 1.5 s. Tab switches back.
 
 ## New in 2.0
 
@@ -32,7 +38,8 @@ that actually runs out, and buildings that collapse block by block.
 
 ## Download
 
-Get the latest Windows zip from this repository's **Releases** page (or from whoever shared it with you).
+Get **Roadster-Rocket-Sim-Windows-v2.1.0.zip** from the [v2.1.0 release](https://github.com/goldengoose100/roadster-rocket-sim/releases/tag/v2.1.0)
+(or from whoever shared it with you).
 Unzip it, open the folder and double-click **Roadster Rocket Sim.exe**. If Windows shows
 "Windows protected your PC", click **More info → Run anyway** (the app isn't code-signed).
 
@@ -58,6 +65,7 @@ You can also check manually from the pause menu (P).
 | F | Fan suction: Auto, Max, Off | |
 | G | | Flight assist on / manual |
 | Click or B | Fire rocket (after picking up a launcher) | same |
+| Tab | Switch rockets / railgun (pierces buildings) | same |
 | R | Reset car upright | same |
 | G (start screen) | Garage | |
 | V | Camera: chase, far, cockpit, cinematic, orbit | |
