@@ -118,17 +118,19 @@ export class Profile {
   // pay, roll, keep it (or get half its value back for a duplicate)
   openCase(caseId, rnd = Math.random) {
     const c = CASES.find(x => x.id === caseId);
-    if (!c || !this.pay(c.price)) return null;
+    if (!c) return null;
+    const paid = !this.cheats.unlimited;   // free cases (unlimited-credits cheat) give no duplicate refund
+    if (!this.pay(c.price)) return null;
     const skin = rollSkin(c, rnd), dup = this.d.skins.includes(skin.id);
     let refund = 0;
-    if (dup) { refund = Math.round(RARITY[skin.rarity].value / 2); this.d.credits += refund; } else this.d.skins.push(skin.id);
+    if (dup) { refund = paid ? Math.round(RARITY[skin.rarity].value / 2) : 0; this.d.credits += refund; } else this.d.skins.push(skin.id);
     this.d.opened++;
     this.save();
     return { skin, dup, refund, case: c };
   }
   collection() { const normal = SKINS.filter(s => s.rarity !== 'dev'); return { have: normal.filter(s => this.hasSkin(s.id)).length, total: normal.length }; }
   // builds
-  saveBuild(i, trim) { this.d.builds[i] = { trim, levels: { ...this.d.setup.levels }, ...this.look(), skin: this.d.setup.skin || null, at: Date.now() }; this.save(); }
+  saveBuild(i, trim) { this.d.builds[i] = { trim, levels: { ...this.d.setup.levels }, ...this.look(), skin: this.skin() ? this.skin().id : null, at: Date.now() }; this.save(); }
   loadBuild(i) {
     const b = this.d.builds[i];
     if (!b) return null;

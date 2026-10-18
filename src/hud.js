@@ -214,9 +214,10 @@ export class HUD {
     const am = this.el.ammo;
     am.hidden = !w.equipped;
     if (w.equipped) {
-      const key = w.mode === 'rail' ? 'rail' + Math.ceil(w.railCharge * 10) : w.mode !== 'rocket' ? 'arm' + w.mode : w.ammo + '|' + (w.reload > 0);
-      if (am.dataset.k !== key && w.mode !== 'rail' && w.mode !== 'rocket') { am.dataset.k = key; am.textContent = w.weapon.name.toUpperCase() + ' · TAB NEXT'; }
-      if (am.dataset.k !== key && w.mode === 'rail') { am.dataset.k = key; am.textContent = w.railCharge > 0 ? `RAILGUN CHARGING ${Math.round((1 - w.railCharge / w.railTime) * 100)}%` : 'RAILGUN READY · TAB = ROCKETS'; }
+      const cd = w.armCds[w.mode] || 0, slow = cd > 0.4;
+      const key = w.mode === 'rail' ? 'rail' + Math.ceil(w.railCharge * 10) : w.mode !== 'rocket' ? 'arm' + w.mode + (slow ? Math.ceil(cd * 10) : '') : w.ammo + '|' + (w.reload > 0);
+      if (am.dataset.k !== key && w.mode !== 'rail' && w.mode !== 'rocket') { am.dataset.k = key; am.textContent = w.weapon.name.toUpperCase() + (slow ? ` · READY IN ${cd.toFixed(1)} S` : ' · TAB NEXT'); }
+      if (am.dataset.k !== key && w.mode === 'rail') { am.dataset.k = key; am.textContent = w.railCharge > 0 ? `RAILGUN CHARGING ${Math.round((1 - Math.min(1, w.railCharge / w.railTime)) * 100)}%` : 'RAILGUN READY · TAB NEXT'; }
       else if (am.dataset.k !== key) {
         am.dataset.k = key;
         am.innerHTML = w.reload > 0 ? 'RELOADING' : 'ROCKETS ' + Array.from({ length: w.mag }, (_, i) => `<i class="${i < w.ammo ? '' : 'used'}"></i>`).join('');

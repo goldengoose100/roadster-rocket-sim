@@ -48,7 +48,8 @@ export class Weapons {
     this.beam.visible = false; this.beam.frustumCulled = false; scene.add(this.beam);
     this.beamT = 0;
     this.arsenal = new Arsenal(scene, fx, destruction, this.hack);
-    this.armCd = 0;
+    this.armCds = {};   // seconds left per gun, so a slow gun never locks out the next one
+    this.nukeCd = 0;
   }
   // Tab / Shift+Tab cycle through every weapon
   toggleMode(back = false) {
@@ -59,7 +60,7 @@ export class Weapons {
   get weapon() { return WEAPON_LIST.find(w => w.id === this.mode); }
   isAuto() { return AUTO.has(this.mode); }
   fireArsenal(model, vehicle, target) {
-    if (this.armCd > 0) return false;
+    if ((this.armCds[this.mode] || 0) > 0) return false;
     const L = model.launcher;
     model.group.position.copy(vehicle.pos); model.group.quaternion.copy(vehicle.quat); model.group.updateMatrixWorld(true);
     this.aim(model, target, 1); model.group.updateMatrixWorld(true);
@@ -67,9 +68,8 @@ export class Weapons {
     const dir = new THREE.Vector3().subVectors(target, from);
     if (dir.lengthSq() < 4) dir.copy(vehicle.fwd);
     dir.normalize();
-    if (this.hack.nukeRounds) { this.d.explode(target.clone(), 30, 3, 'nuke'); this.armCd = 1; this.fired++; if (this.onFire) this.onFire(from, 'rail'); return true; }
     this.arsenal.fire(this.mode, from, dir, vehicle, target);
-    this.armCd = this.weapon.cd / (this.hack.rapidFire ? 4 : 1) / (this.hack.fireRate || 1);
+    this.armCds[this.mode] = this.weapon.cd / (this.hack.rapidFire ? 4 : 1) / (this.hack.fireRate || 1);
     this.fired++;
     if (this.onFire) this.onFire(from, this.mode);
     return true;
@@ -109,7 +109,7 @@ export class Weapons {
     this.beam.scale.set(1, end, 1); this.beam.visible = true; this.beamT = 0.45;
     for (let i = 0; i < 40; i++) { const q = from.clone().addScaledVector(dir, Math.random() * end); this.fx.fire.spawn(q.x, q.y, q.z, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, 0.4, 0.5, 0.1, 0.6, 0.9, 1, 0.8); }
     vehicle.applyImpulse(dir.clone().multiplyScalar(-2500), from);
-    this.railCharge = this.hack.rapidFire ? 0.15 : this.railTime;
+    this.railCharge = (this.hack.rapidFire ? 0.15 : this.railTime) / (this.hack.fireRate || 1);
     this.fired++;
     if (this.onFire) this.onFire(from, 'rail');
     return true;
@@ -142,7 +142,18 @@ export class Weapons {
     L.pitch.rotation.x += (-Math.max(-0.35, Math.min(0.9, pitch)) - L.pitch.rotation.x) * snap;
   }
 
+  // mod menu "every shot is a nuke": works for every gun
+  fireNuke(vehicle, target) {
+    if (this.nukeCd > 0) return false;
+    this.nukeCd = 1 / (this.hack.fireRate || 1);
+    this.d.explode(target.clone(), 30, 3, 'nuke');
+    this.fired++;
+    if (this.onFire) this.onFire(vehicle.pos.clone(), 'rail');
+    return true;
+  }
+
   tryFire(model, vehicle, target) {
+    if (this.equipped && this.hack.nukeRounds) return this.fireNuke(vehicle, target);
     if (this.equipped && this.mode === 'rail') return this.fireRail(model, vehicle, target);
     if (this.equipped && this.mode !== 'rocket') return this.fireArsenal(model, vehicle, target);
     if (!this.equipped || this.cooldown > 0 || this.reload > 0 || this.ammo <= 0) return false;
@@ -168,7 +179,7 @@ export class Weapons {
     if (this.hack.homing) rk.target = this.findTarget(pos, dir);
     this.rockets.push(rk);
     this.fired++;
-    this.cooldown = this.hack.rapidFire ? 0.06 : 0.2;
+    this.cooldown = (this.hack.rapidFire ? 0.06 : 0.2) / (this.hack.fireRate || 1);
     if (!this.hack.infiniteAmmo) { this.ammo--; if (this.ammo <= 0) this.reload = this.reloadTime; }
     // muzzle blast
     for (let i = 0; i < 8; i++) this.fx.smoke.spawn(pos.x, pos.y, pos.z, -dir.x * 4 + (Math.random() - 0.5) * 3, -dir.y * 4 + Math.random() * 2, -dir.z * 4 + (Math.random() - 0.5) * 3, 1.2, 0.4, 2.2, 0.7, 0.7, 0.7, 0.5);
@@ -215,7 +226,8 @@ export class Weapons {
     }
     if (this.cooldown > 0) this.cooldown -= dt;
     if (this.railCharge > 0) this.railCharge = Math.max(0, this.railCharge - dt);
-    if (this.armCd > 0) this.armCd -= dt;
+    for (const k in this.armCds) if (this.armCds[k] > 0) this.armCds[k] -= dt;
+    if (this.nukeCd > 0) this.nukeCd -= dt;
     if (this.vehicle) this.arsenal.update(dt, this.vehicle);
     if (this.beamT > 0) { this.beamT -= dt; this.beam.material.opacity = Math.max(0, this.beamT / 0.45) * 0.9; this.beam.scale.x = this.beam.scale.z = 1 + (0.45 - this.beamT) * 3; if (this.beamT <= 0) this.beam.visible = false; }
     if (this.reload > 0) { this.reload -= dt; if (this.reload <= 0) { this.reload = 0; this.ammo = this.mag; } }

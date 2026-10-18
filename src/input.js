@@ -4,7 +4,7 @@ export class Input {
     this.down = new Set();
     this.pressed = [];          // one-shot key presses this frame
     this.dragDX = 0; this.dragDY = 0; this.wheel = 0; this.clicks = 0;
-    this.mouseDown = false; this.moved = 0; this.downT = 0;
+    this.mouseDown = false; this.leftDown = false; this.moved = 0; this.downT = 0;
     this.enabled = true;
     const block = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Backspace']);
     window.addEventListener('keydown', (e) => {
@@ -15,10 +15,10 @@ export class Input {
       this.down.add(e.code);
     });
     window.addEventListener('keyup', (e) => { this.down.delete(e.code); });
-    window.addEventListener('blur', () => { this.down.clear(); this.mouseDown = false; });
+    window.addEventListener('blur', () => { this.down.clear(); this.mouseDown = false; this.leftDown = false; });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.down.clear(); });
     canvas.addEventListener('pointerdown', (e) => {
-      this.mouseDown = true; this.moved = 0; this.downT = performance.now();
+      this.mouseDown = true; this.leftDown = e.button === 0; this.moved = 0; this.downT = performance.now();
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* optional */ }
       canvas.focus();
     });
@@ -29,11 +29,11 @@ export class Input {
     });
     const up = (e) => {
       if (!this.mouseDown) return;
-      this.mouseDown = false;
+      this.mouseDown = false; this.leftDown = false;
       if (e.button === 0 && this.moved < 8 && performance.now() - this.downT < 450) this.clicks++;
     };
     canvas.addEventListener('pointerup', up);
-    canvas.addEventListener('pointercancel', () => { this.mouseDown = false; });
+    canvas.addEventListener('pointercancel', () => { this.mouseDown = false; this.leftDown = false; });
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel += Math.sign(e.deltaY); }, { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }

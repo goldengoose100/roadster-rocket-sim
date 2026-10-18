@@ -33,8 +33,8 @@ export class GarageUI {
       tr.appendChild(b);
     }
   }
-  open() { this.statsCache.clear(); this.render(); }
-  close() { this.clearPreview(); }
+  open() { this.isOpen = true; this.statsCache.clear(); this.render(); }
+  close() { this.isOpen = false; this.clearPreview(); if (this.ticker) { clearInterval(this.ticker); this.ticker = null; } }
   clearPreview() { if (this.preview) { this.preview = null; this.ctx.apply(); } }
 
   render() {
@@ -106,7 +106,7 @@ export class GarageUI {
       sec.querySelectorAll('button[data-id]').forEach(b => {
         b.onclick = () => {
           const id = b.dataset.id;
-          if (p.hasPart(kind, id)) { this.preview = null; p.setPart(kind, id); this.ctx.apply(); }
+          if (p.hasPart(kind, id)) { this.preview = null; p.setPart(kind, id); if (kind === 'paint') p.setSkin(null); this.ctx.apply(); }
           else { this.preview = { kind, id }; this.ctx.apply({ [kind]: id }); }
           this.ctx.sound.click(); this.render();
         };
@@ -114,7 +114,7 @@ export class GarageUI {
       const pb = sec.querySelector('#gpb-' + kind);
       if (pb) pb.onclick = () => {
         const it = findItem(kind, this.preview.id);
-        if (p.buyPart(kind, it.id)) { this.preview = null; this.ctx.apply(); this.ctx.sound.pickup(); this.ctx.toast(`${it.name} bought`, 'good', 1600); }
+        if (p.buyPart(kind, it.id)) { this.preview = null; if (kind === 'paint') p.setSkin(null); this.ctx.apply(); this.ctx.sound.pickup(); this.ctx.toast(`${it.name} bought`, 'good', 1600); }
         else { this.ctx.sound.warn(); this.ctx.toast(`Not enough credits: ${it.name} costs ${fmt(it.price)} CR`, 'warn', 2200); }
         this.render();
       };
@@ -131,14 +131,14 @@ export class GarageUI {
     html += '</div><div class="greel" id="greel" hidden><div class="greel-strip" id="greel-strip"></div><i class="greel-mark"></i></div><div id="gwin" class="gwin" hidden></div>';
     const col = p.collection();
     html += `<h3 class="gcol">Your skins <span>${col.have}/${col.total} collected · ${p.d.opened} cases opened</span></h3><div class="gskins">`;
-    const cur = p.d.setup.skin;
+    const cur = p.skin() ? p.skin().id : null;   // the skin actually fitted (a Dev skin drops off when its cheat is off)
     html += `<button class="gskin" data-id="" aria-pressed="${!cur}" style="--rc:#5d6873"><i style="background:${findItem('paint', p.look().paint).color}"></i><span>Plain paint</span></button>`;
     const show = SKINS.filter(s => p.hasSkin(s.id));
     for (const s of show) html += `<button class="gskin${s.rarity === 'dev' ? ' dev' : ''}" data-id="${s.id}" aria-pressed="${s.id === cur}" style="--rc:${RARITY[s.rarity].col}" title="${esc(RARITY[s.rarity].name)}"><i style="background:${swatchCss(s)}"></i><span>${esc(s.name)}</span></button>`;
     html += '</div>';
     if (!show.length) html += '<p class="gtx">Open a case to win your first skin. Grey is common, gold is legendary.</p>';
     body.innerHTML = html;
-    body.querySelectorAll('.gskin').forEach(b => { b.onclick = () => { p.setSkin(b.dataset.id || null); this.ctx.apply(); this.ctx.sound.click(); this.render(); }; });
+    body.querySelectorAll('.gskin').forEach(b => { b.onclick = () => { if (this.spinning) return; p.setSkin(b.dataset.id || null); this.ctx.apply(); this.ctx.sound.click(); this.render(); }; });
     for (const c of CASES) $('gopen-' + c.id).onclick = () => this.openCase(c);
   }
   // spin a reel of skins and land on the one the case gave
@@ -163,10 +163,12 @@ export class GarageUI {
     strip.style.transition = 'transform 4.2s cubic-bezier(.12,.75,.1,1)';
     strip.style.transform = `translateX(${x}px)`;
     let tick = 0;
-    const ticker = setInterval(() => { tick++; if (tick % Math.ceil(1 + tick / 8) === 0) this.ctx.sound.click(); }, 60);
+    this.ticker = setInterval(() => { tick++; if (tick % Math.ceil(1 + tick / 8) === 0) this.ctx.sound.click(); }, 60);
     setTimeout(() => {
-      clearInterval(ticker);
+      if (this.ticker) { clearInterval(this.ticker); this.ticker = null; }
       this.spinning = false;
+      // garage closed mid-spin: keep the skin, repaint the car, no fanfare and no trim reset during the drive
+      if (!this.isOpen) { if (!res.dup) { this.p.setSkin(res.skin.id); this.ctx.look(); } return; }
       const r = RARITY[res.skin.rarity];
       const w = $('gwin');
       if (!w) return;

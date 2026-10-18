@@ -73,6 +73,11 @@ if (want('garage')) {
   await page.click('.gskin[data-id^="' + await ev(() => window.__sim.profile.d.skins[0]) + '"]');
   await shot('09e-skin-equipped', 900);
   check('a won skin can be equipped', await ev(() => window.__sim.profile.skin()?.id === window.__sim.profile.d.skins[0]));
+  // picking a paint takes the skin off (try-on preview + buy keep working with a skin fitted)
+  await page.click('#gt-style'); await page.click('.gsec:nth-child(1) button[data-id=red]'); await page.waitForTimeout(200);
+  const painted = await ev(() => ({ skin: window.__sim.profile.skin(), fitted: window.__sim.model.skin, col: window.__sim.model.mats.paint.color.getHexString() }));
+  check('picking a paint replaces the skin', !painted.skin && !painted.fitted && painted.col !== 'ffffff', JSON.stringify(painted));
+  await page.click('#gt-skins');
   await page.click('#g-done');
   check('garage closes back to the start screen', await ev(() => !document.getElementById('start').hidden && document.getElementById('garage').hidden));
 }
@@ -251,14 +256,22 @@ if (want('guns')) {
   let ok = 0; const bad = [];
   for (const [i, id] of ids.entries()) {
     await ev(() => { window.__sim.destruction.rebuild(); window.__sim.teleport(1); });
-    await ev((id) => { const w = window.__sim.weapons; w.equip(); w.mode = id; w.armCd = 0; }, id);
+    await ev((id) => { const w = window.__sim.weapons; w.equip(); w.mode = id; w.armCds = {}; }, id);
     await cam([600, 16, -600], [560, 2, -705], 60);
-    const fired = await ev(() => { let n = 0; for (let k = 0; k < 6; k++) { window.__sim.weapons.armCd = 0; if (window.__sim.fireAt(560, 2.5, -705)) n++; window.__sim.step(12, {}); } return n; });
+    const fired = await ev(() => { let n = 0; for (let k = 0; k < 6; k++) { window.__sim.weapons.armCds = {}; if (window.__sim.fireAt(560, 2.5, -705)) n++; window.__sim.step(12, {}); } return n; });
     await ev(() => window.__sim.step(240 * 1.2, {}));
     await shot(`40-gun-${String(i + 1).padStart(2, '0')}-${id}`, 250);
     if (fired > 0) ok++; else bad.push(id);
   }
   check(`all ${ids.length} new guns fire`, ids.length === 14 && ok === ids.length, bad.join(','));
+  // each gun has its own cooldown: a meteor shower doesn't lock out the minigun
+  const swap = await ev(() => { const S = window.__sim, w = S.weapons; w.armCds = {}; w.mode = 'meteor'; const a = S.fireAt(560, 2.5, -705); w.mode = 'minigun'; const b = S.fireAt(560, 2.5, -705); w.mode = 'meteor'; const c = S.fireAt(560, 2.5, -705); return [a, b, c]; });
+  check('switching from a slow gun fires straight away (own cooldowns)', swap[0] && swap[1] && !swap[2], JSON.stringify(swap));
+  // a mine dropped by a parked car doesn't blow the car up
+  await ev(() => { const S = window.__sim; S.destruction.rebuild(); S.teleport(1); S.weapons.armCds = {}; S.weapons.mode = 'mines'; S.fireAt(560, 2.5, -705); });
+  const mine = await ev(() => { const S = window.__sim, p0 = S.vehicle.pos.clone(); S.step(240 * 3, {}); return { moved: S.vehicle.pos.distanceTo(p0), left: S.weapons.arsenal.mines.length, hits: S.vehicle.damage ? S.vehicle.damage.hits : 0 }; });
+  check('a mine dropped while parked stays put and leaves the car alone', mine.left === 1 && mine.moved < 0.5, JSON.stringify(mine));
+  await ev(() => window.__sim.weapons.arsenal.clear());
   await camOff(); await ev(() => { window.__sim.weapons.mode = 'rocket'; window.__sim.destruction.rebuild(); });
 }
 

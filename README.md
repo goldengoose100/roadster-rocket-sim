@@ -22,7 +22,8 @@ that actually runs out, and buildings that collapse block by block.
 - **Mod menu**: pick any gun, fire-rate slider, no bullet drop, giant shots, explosive rounds, rainbow tracers,
   nuke rounds, meteor shower / orbital laser / black hole / Armageddon buttons, +100K credits, unlock all case skins
   and 50 secret Dev skins you can only get from the menu.
-- A new update window and a "What's new" screen after each update.
+- A new in-game update screen and a "What's new" screen after the update. (The startup update window gets the
+  same look with the next full app download.)
 
 ## New in 2.0
 

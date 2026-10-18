@@ -21,7 +21,7 @@ Each session builds one block, tests it (existing suites + new tests), and ships
 - The Moon: 0.17 g, craters, Earth in the sky, air lasts ~6x longer
 - Neon city at night: streets, tunnels, rooftop ramps, parking garages to wall-ride, glowing signs, wet roads
 
-## Session 4: Weapons
+## Session 4: Weapons (2.1.0: railgun; 2.2.0: 14 more guns incl. mines, black hole, orbital laser, Tab / Shift+Tab to switch)
 - Weapon wheel on Tab, ammo crates around the map
 - Railgun (pierces buildings), grapple hook, mines, tractor beam (lift and throw debris), EMP (drops drones, stalls cars),
   orbital laser, black-hole bomb (pulls in debris, then blasts it out)
@@ -40,6 +40,10 @@ Each session builds one block, tests it (existing suites + new tests), and ships
 
 ## Session 7: New vehicles
 - Cybertruck (heavy, tough, smashes things) and Rocket Semi (tows a trailer, giant thrusters), each with its own physics
+
+## Done outside the sessions
+- 2.2.0: skin cases (Street + Elite, 5 rarities, 37 skins), 50 secret Dev skins from the mod menu, mod-menu weapon
+  cheats, in-game update screen + What's new screen
 
 ## Session 8: Physics 2.0 (2.0.0: tires, soft-body crashes + HQ repair, aero + slipstream + wind, gas physics, shockwaves; fracture, ropes and water/mud still to do)
 - Tire model: heat, wear, pressure; grip changes with temperature; visible smoke and wear

@@ -239,8 +239,9 @@ export class Hacks {
       } else if (d.type === 'select') {
         const wrap = document.createElement('div'); wrap.className = 'hk-sl';
         const sel = document.createElement('select'); sel.id = id;
-        for (const [name, val] of d.options) { const o = document.createElement('option'); o.value = String(val); o.textContent = name; if (String(val) === String(this.v[d.id])) o.selected = true; sel.appendChild(o); }
-        sel.onchange = () => { const opt = d.options.find(o => String(o[1]) === sel.value); this.set(d.id, opt[1]); sel.blur(); };
+        const curVal = d.id === 'gunPick' ? this.api.weapons.mode : this.v[d.id];   // the gun list shows the gun in hand
+        for (const [name, val] of d.options) { const o = document.createElement('option'); o.value = String(val); o.textContent = name; if (String(val) === String(curVal)) o.selected = true; sel.appendChild(o); }
+        sel.onchange = () => { const opt = d.options.find(o => String(o[1]) === sel.value); this.set(d.id, opt[1]); if (d.id === 'gunPick') this.pickGun(opt[1]); sel.blur(); };
         wrap.appendChild(sel);
         if (d.button) { const b = document.createElement('button'); b.className = 'hk-btn'; b.textContent = d.button; b.onclick = () => this.action('doSpawn'); wrap.appendChild(b); }
         row.appendChild(wrap);
@@ -271,8 +272,8 @@ export class Hacks {
     switch (id) {
       case 'power': case 'topSpeed': case 'grip': case 'thrust': case 'noFlip': case 'stickyFan': case 'infiniteAir': case 'rollAnyTrim': case 'noDamage': case 'noTireHeat': h[id] = val; break;
       case 'unlimitedCredits': a.profile.cheats.unlimited = !!val; a.onCheats(); break;
-      case 'unlockSkins': case 'devSkins': a.profile.cheats[id] = !!val; a.onCheats(); break;
-      case 'gunPick': if (val !== 'rocket' || a.weapons.mode !== 'rocket') { a.weapons.mode = val; if (!a.weapons.equipped) a.weapons.equip(); } break;
+      case 'unlockSkins': case 'devSkins': a.profile.cheats[id] = !!val; a.onSkins(); break;
+      case 'gunPick': break;   // only switches when the list is changed (see pickGun), never on unlock or reset
       case 'fireRate': case 'noGravity': case 'bigShots': case 'explosiveRounds': case 'rainbowTracers': case 'nukeRounds': a.weapons.hack[id] = val; break;
       case 'unlockAll': a.profile.cheats.unlockAll = !!val; a.onCheats(); break;
       case 'gravity': h.gravity = val; a.destruction.gravityScale = this.v.floatDebris ? 0 : val; break;
@@ -291,9 +292,17 @@ export class Hacks {
       case 'fps': $('hk-fps').hidden = !val; break;
       case 'freeCam': a.setFreeCam(val); break;
       case 'photo': a.setPhoto(val); break;
-      case 'rainbow': case 'disco': if (!this.v.rainbow && !this.v.disco) a.applyLook(); break;
+      case 'rainbow': case 'disco': a.applyLook(); break;   // on: drops a skin so the colours show; off: brings it back
       default: break;
     }
+  }
+
+  pickGun(id) {
+    if (!this.unlocked) return;
+    const w = this.api.weapons;
+    if (!w.equipped) w.equip();
+    w.mode = id;
+    this.api.toast(w.weapon.name, 'warn', 1200);
   }
 
   action(id) {
@@ -310,9 +319,9 @@ export class Hacks {
       case 'doRepair': a.repair(); break;
       case 'doMeteor': a.weapons.arsenal.fire('meteor', aim, aim, a.vehicle, aim); a.toast('Meteor shower', 'warn', 1500); break;
       case 'doOrbital': a.weapons.arsenal.fire('orbital', aim, aim, a.vehicle, aim); a.toast('Orbital laser locked', 'warn', 1500); break;
-      case 'doHole': a.weapons.arsenal.fire('blackhole', aim.clone().setY(aim.y + 3), new THREE.Vector3(0, 0, 0), a.vehicle, aim); break;
-      case 'doArmageddon': for (const k of ['meteor', 'orbital', 'clusterbomb']) a.weapons.arsenal.fire(k, aim.clone().setY(aim.y + 20), new THREE.Vector3(0, -1, 0), a.vehicle, aim); a.nuke(aim); a.toast('ARMAGEDDON', 'warn', 2000); break;
-      case 'doCash': a.profile.earn(100000); a.onCheats(); a.toast('+100,000 credits', '', 1500); break;
+      case 'doHole': a.weapons.arsenal.holes.push({ pos: aim.clone().setY(aim.y + 3), t: 0 }); break;
+      case 'doArmageddon': { const still = { vel: new THREE.Vector3(), pos: a.vehicle.pos, fwd: a.vehicle.fwd, applyImpulse() {} }; for (const k of ['meteor', 'orbital', 'clusterbomb']) a.weapons.arsenal.fire(k, aim.clone().setY(aim.y + 20), new THREE.Vector3(0, -1, 0), still, aim); a.weapons.arsenal.holes.push({ pos: aim.clone().setY(aim.y + 4), t: 0 }); } a.nuke(aim); a.toast('ARMAGEDDON', 'warn', 2000); break;
+      case 'doCash': a.profile.earn(100000); a.toast('+100,000 credits', '', 1500); break;
       default: break;
     }
   }

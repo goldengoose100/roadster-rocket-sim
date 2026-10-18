@@ -354,7 +354,7 @@ async function boot(hotData = {}) {
     const b = document.createElement('button');
     b.className = 'sw'; b.id = 'paint-' + p.id; b.title = p.name; b.setAttribute('aria-label', p.name);
     b.style.background = p.color;
-    b.addEventListener('click', () => { settings.paint = p.id; saveSettings(); profile.setPart('paint', p.id); applyLook(); syncPaints(); });
+    b.addEventListener('click', () => { settings.paint = p.id; saveSettings(); profile.setPart('paint', p.id); profile.setSkin(null); applyLook(); syncPaints(); });
     paintsEl.appendChild(b);
   }
   syncPaints();
@@ -364,9 +364,9 @@ async function boot(hotData = {}) {
   const applyLook = (preview = {}) => {
     const L = Object.assign(profile.look(), preview);
     const hv = hacks && hacks.unlocked ? hacks.v : null;
-    const skin = preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
+    const skin = preview.paint !== undefined ? null : preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
     if (hv && hv.paint) { model.setSkin(null); model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); }
-    else if (skin) model.setSkin(skin);
+    else if (skin && !(hv && (hv.rainbow || hv.disco))) model.setSkin(skin);
     else model.setSkin(null, findItem('paint', L.paint));
     model.setLook({ wheels: L.wheels, wing: L.wing });
     const glow = findItem('glow', L.glow), hackGlow = hv && hv.underglow;
@@ -459,6 +459,7 @@ async function boot(hotData = {}) {
   // ---------- garage ----------
   const garageUI = new GarageUI(profile, {
     apply: (preview) => { applyTrim(); applyLook(preview || {}); },
+    look: () => applyLook(),
     setTrim: (id) => setTrimId(id),
     trimId: () => settings.trim,
     phys2: () => vehicle.phys2,
@@ -549,7 +550,7 @@ async function boot(hotData = {}) {
   const needsRepair = () => vehicle.damage.isDamaged(vehicle) || vehicle.wheels.some(w => w.wear > 0.02) || vehicle.thrusters.some(t => t.health < 1);
   const _ev = new THREE.Vector3(), _ev2 = new THREE.Vector3();
   const toWorld = (lp, out) => out.copy(lp).applyQuaternion(vehicle.quat).add(vehicle.pos);
-  const paintColor = () => new THREE.Color().copy(model.mats.paint.color);
+  const paintColor = () => model.skin ? new THREE.Color(model.skin.a) : new THREE.Color().copy(model.mats.paint.color);
   const startCrashCam = () => {
     if (G.crashCam || freeCam.on || !(hacks && hacks.unlocked && hacks.v.crashCam) || G.state !== 'play') return;
     const off = camera.position.clone().sub(vehicle.pos);
@@ -1013,6 +1014,7 @@ async function boot(hotData = {}) {
     toast: (m, k, ms) => hud.toast(m, k, ms),
     setTimeOfDay, aimPoint, teleportTo, nuke, spawn: spawnThing, rebuild: () => rebuild(), setXray, setFreeCam, setPhoto, applyLook,
     profile, onCheats, repair: instantRepair,
+    onSkins: () => { applyLook(); if (G.overlay === 'garage') garageUI.render(); },
   });
 
   // "-" opens the mod menu immediately (not on the next frame) so nothing typed leaks into the game
@@ -1024,7 +1026,8 @@ async function boot(hotData = {}) {
     if (!e.repeat) hacks.toggle();
   });
 
-  const WHATS_NEW = ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A cooler update window'];
+  // shown once after updating to that exact version (a bugfix release without an entry shows nothing)
+  const WHATS_NEW = { '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {
@@ -1048,12 +1051,13 @@ async function boot(hotData = {}) {
       if (localStorage.getItem('rrs-seen-ver') !== desk.gameVersion) {
         const first = localStorage.getItem('rrs-seen-ver') === null && !localStorage.getItem('rrs.garage');
         localStorage.setItem('rrs-seen-ver', desk.gameVersion);
-        if (!first && WHATS_NEW.length) setTimeout(() => {
+        const news = WHATS_NEW[desk.gameVersion];
+        if (!first && news) setTimeout(() => {
           if (!$('upd').hidden) return;
           pending = null;
           $('upd-title').textContent = "What's new";
           $('upd-ver').textContent = `Version ${desk.gameVersion}`;
-          $('upd-notes').innerHTML = WHATS_NEW.map(n => `<li>${n}</li>`).join('');
+          $('upd-notes').innerHTML = news.map(n => `<li>${n}</li>`).join('');
           $('upd-status').textContent = ''; $('upd-barw').hidden = true;
           $('upd-go').textContent = "Let's go"; $('upd-go').disabled = false;
           $('upd-go').addEventListener('click', () => { if (!pending) $('upd-later').click(); }, { once: true });
@@ -1107,7 +1111,7 @@ async function boot(hotData = {}) {
         controls.rollTap = G.rollTap; G.rollTap = 0;
         if (G.state === 'play') {
           // fire
-          const fire = input.clicks > 0 || controls.fire || (input.mouseDown && weapons.isAuto());
+          const fire = input.clicks > 0 || controls.fire || (input.leftDown && weapons.isAuto());
           input.clicks = 0;
           if (fire && weapons.equipped) weapons.tryFire(model, vehicle, G.aim);
         }
