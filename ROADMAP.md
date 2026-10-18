@@ -16,7 +16,7 @@ Each session builds one block, tests it (existing suites + new tests), and ships
 - Stunt score: barrel rolls, wall rides, loops, big air, flips; combo multiplier, clean-landing bonus
 - About 20 missions paying credits (land on all 4 mesas, flatten the fortress in 30 s, 200 m on the loop ceiling, 20 s airborne on real air...)
 
-## Session 3: New maps
+## Session 3: New maps (dropped by the owner, don't build)
 - Map picker on the start screen
 - The Moon: 0.17 g, craters, Earth in the sky, air lasts ~6x longer
 - Neon city at night: streets, tunnels, rooftop ramps, parking garages to wall-ride, glowing signs, wet roads
