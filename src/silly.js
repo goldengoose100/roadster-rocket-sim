@@ -28,6 +28,26 @@ export function sillyBody(id) {
   g.name = 'silly-' + id;
   g.updateMatrixWorld(true);
   g.userData.box = new THREE.Box3().setFromObject(g);
+  findAnchors(g);
   cache.set(id, g);
   return g;
+}
+
+// where the party hat and googly eyes go: a body can set userData.hat / userData.eyes itself,
+// otherwise the hat sits on the highest point along the middle and the eyes on the front face
+const _rc = new THREE.Raycaster(), _o = new THREE.Vector3(), _down = new THREE.Vector3(0, -1, 0), _back = new THREE.Vector3(0, 0, -1);
+function findAnchors(g) {
+  const meshes = []; g.traverse(o => { if (o.isMesh && o.visible) meshes.push(o); });
+  const box = g.userData.box, h = box.max.y - box.min.y;
+  let hat = null;
+  for (let i = 0; i <= 16; i++) {
+    const z = box.min.z + (box.max.z - box.min.z) * (0.15 + 0.7 * i / 16);
+    _rc.set(_o.set(0, box.max.y + 1, z), _down);
+    const hit = _rc.intersectObjects(meshes, false)[0];
+    if (hit && (!hat || hit.point.y > hat.y + 0.02)) hat = hit.point.clone();
+  }
+  _rc.set(_o.set(0, box.min.y + h * 0.6, box.max.z + 1), _back);
+  const eye = _rc.intersectObjects(meshes, false)[0];
+  g.userData.hatAt = g.userData.hat || hat || new THREE.Vector3(0, box.max.y, (box.min.z + box.max.z) / 2);
+  g.userData.eyesAt = g.userData.eyes || (eye ? eye.point.clone() : new THREE.Vector3(0, box.min.y + h * 0.6, box.max.z));
 }

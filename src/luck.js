@@ -131,13 +131,14 @@ export class Luck {
     if (this.eyes) {
       this.eyes.visible = on && this.v.eyes;
       // on the default car the eyes sit on the hood; on a silly body, high on its front face
-      if (m.sillyBody) this.eyes.position.set(0, box.min.y + (box.max.y - box.min.y) * 0.62, box.max.z - 0.02);
+      if (m.sillyBody) this.eyes.position.copy(m.sillyBody.userData.eyesAt).add(_v.set(0, 0, 0.02));
       else this.eyes.position.set(0, 0.16, 1.62);
       this.eyes.rotation.x = m.sillyBody ? 0 : -0.35;
     }
     if (this.hat) {
       this.hat.visible = on && this.v.hat;
-      this.hat.position.set(0, box.max.y - 0.04, m.sillyBody ? (box.min.z + box.max.z) / 2 : -0.25);
+      if (m.sillyBody) this.hat.position.copy(m.sillyBody.userData.hatAt).add(_v.set(0, -0.03, 0));
+      else this.hat.position.set(0, box.max.y - 0.04, -0.25);
     }
   }
   resetJelly() {
