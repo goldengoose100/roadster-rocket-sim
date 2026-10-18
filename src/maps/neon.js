@@ -12,6 +12,7 @@ export default {
   id: 'neon', name: 'Neon City', desc: 'Night city: tunnel, skyway, rooftop jumps', col: '#ff2bd6',
   zones: T.zones, flats: T.flats, height: T.height, paved: T.paved, color: T.color, mapColor: T.mapColor, env: T.env,
   dollSpots,
+  mapDrawsPaved: true,   // the whole city is paved: the minimap uses mapColor's street grid
   // one broken part must not stop the map from loading
   build(world) { for (const [name, fn] of Object.entries(PARTS)) { try { fn(world); } catch (e) { console.warn(`neon/${name}`, e); } } },
 };

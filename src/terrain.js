@@ -293,7 +293,7 @@ export function buildMapImage(size = 512) {
     let r = 196, gg = 168, b = 124;
     if (MAP) [r, gg, b] = MAP.mapColor(x, z, h);
     else if (h > 20) { const t = Math.min(1, (h - 20) / 80); r = 196 - 60 * t; gg = 168 - 80 * t; b = 124 - 60 * t; }
-    if (isPaved(x, z)) { r = 70; gg = 72; b = 78; }
+    if ((!MAP || !MAP.mapDrawsPaved) && isPaved(x, z)) { r = 70; gg = 72; b = 78; }   // Neon City draws its own street grid
     const k = (py * size + px) * 4;
     img.data[k] = r * shade; img.data[k + 1] = gg * shade; img.data[k + 2] = b * shade; img.data[k + 3] = 255;
   }
