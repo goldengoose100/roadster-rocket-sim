@@ -87,7 +87,7 @@ export class Luck {
     if (!this.unlocked) return;
     const a = this.api, v = this.v;
     switch (id) {
-      case 'unlockAll': a.syncCheats(); a.onCheats(); break;
+      case 'unlockAll': { const before = JSON.stringify(a.profile.cheats); a.syncCheats(); if (JSON.stringify(a.profile.cheats) !== before) a.onCheats(); break; }   // only when it changed (onCheats refills the tank)
       case 'skin': a.applyLook(); break;
       case 'car': this.fitCar(); break;
       case 'giantWheels': this.fitWheels(); break;
@@ -185,7 +185,7 @@ export class Luck {
     if (!running) return;
     // bouncy car: a hard landing throws it back up (boing)
     if (v.bouncy) {
-      if (!veh.contacts) this.airVy = Math.min(this.airVy, veh.vel.y);
+      if (!veh.contacts) this.airVy = veh.vel.y;   // speed just before touching down (a reset or teleport starts at 0)
       else {
         if (this.airVy < -4) { veh.vel.y = -this.airVy * 0.72; a.sound.boing(); }
         this.airVy = 0;

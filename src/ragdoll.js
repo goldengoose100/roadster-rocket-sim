@@ -68,8 +68,8 @@ class Doll {
     }
     // keep knees and elbows from folding through themselves, and the head out of the chest
     const seg = (id) => this.segs.find(x => x.id === id);
-    for (const [c, p, min] of [['foreL', 'armL', 0.3], ['foreR', 'armR', 0.3], ['shinL', 'thighL', 0.45], ['shinR', 'thighR', 0.45]]) this.cons.push([seg(c).ib, seg(p).ia, min * s, 2]);
-    this.cons.push([seg('head').ib, 1, 0.7 * s, 2]);
+    for (const [c, p, min] of [['foreL', 'armL', 0.3], ['foreR', 'armR', 0.3], ['shinL', 'thighL', 0.45], ['shinR', 'thighR', 0.45]]) this.cons.push([seg(c).ib, seg(p).ia, min * s, 2, seg(c)]);
+    this.cons.push([seg('head').ib, 1, 0.7 * s, 2, seg('head')]);
     // meshes
     const torso = new THREE.Group();
     const tm = new THREE.Mesh(mgr.geo(`t${s}`, () => new THREE.CapsuleGeometry(0.15 * s, 0.48 * s, 4, 10)), mats.torso);
@@ -125,12 +125,13 @@ class Doll {
     for (const c of this.cons) if (c[3] !== 2) c[2] = this.p[c[0]].distanceTo(this.p[c[1]]);
     for (const st of this.stumps) { st.mesh.parent && st.mesh.parent.remove(st.mesh); }
     this.stumps.length = 0;
-    this.hp = this.type.hp; this.dead = false; this.deadT = 0; this.limbs = 0; this.koPay = 0; this.torsoHp = this.type.hp * 1.3; this.burst = false;
+    this.hp = this.type.hp; this.dead = false; this.deadT = 0; this.limbs = 0; this.koPay = 0; this.ramT = 0; this.downT = 0; this.torsoHp = this.type.hp * 1.3; this.burst = false;
     this.state = 'stand'; this.still = 0; this.dirty = true; this.shownHp = -1;
     this.bar.visible = true;
     this.draw(); this.drawBar();
   }
   get pelvis() { return this.p[1]; }
+  joined(g) { return g.on && (!g.parentSeg || this.joined(g.parentSeg)); }
   wake() { if (this.state !== 'rag') { this.state = 'rag'; } this.still = 0; }
   addVel(i, v) { this.o[i].addScaledVector(v, -SUB); }
   // nearest body part to a point (and its distance)
@@ -139,7 +140,7 @@ class Doll {
     const td = segDist(pt, this.p[0], this.p[1]) - 0.17 * this.s;
     if (td < bd) { bd = td; best = null; }
     for (const g of this.segs) {
-      if (!g.mesh.visible) continue;
+      if (!this.joined(g)) continue;
       const d = (g.id === 'head' ? this.p[g.ia].distanceTo(pt) - 0.2 * this.s : segDist(pt, this.p[g.ia], this.p[g.ib]) - g.r * this.s);
       if (d < bd) { bd = d; best = g; }
     }
@@ -206,7 +207,7 @@ class Doll {
     }
     for (let it = 0; it < ITER; it++) {
       for (const c of this.cons) {
-        if (c[3] === 3) continue;
+        if (c[3] === 3 || (c[4] && !c[4].on)) continue;
         const a = p[c[0]], b = p[c[1]];
         _a.subVectors(b, a);
         const d = _a.length() || 1e-6;
@@ -274,6 +275,12 @@ class Doll {
     this.mgr.scene.remove(this.group); this.mgr.scene.remove(this.bar);
     if (this.stand) this.mgr.scene.remove(this.stand);
     this.tex.dispose(); this.bar.material.dispose();
+    const shared = new Set(this.mgr.geos.values()), sharedMats = new Set([this.mgr.standMat, ...this.mgr.stumpMats.values()]);
+    this.group.traverse(o => {
+      if (!o.isMesh) return;
+      if (!shared.has(o.geometry)) o.geometry.dispose();
+      for (const m of [].concat(o.material)) if (!sharedMats.has(m)) m.dispose();
+    });
   }
 }
 
@@ -377,6 +384,7 @@ export class Ragdolls {
     _inv.copy(veh.quat).invert();
     for (const d of this.dolls) {
       if (d.pelvis.distanceTo(veh.pos) > 4 + d.s) continue;
+      const close = _c.subVectors(d.p[1], d.o[1]).multiplyScalar(-1 / SUB).add(veh.vel).length();
       let hits = 0;
       for (let i = 0; i < d.n; i++) {
         _a.subVectors(d.p[i], veh.pos).applyQuaternion(_inv);
@@ -390,8 +398,8 @@ export class Ragdolls {
       }
       if (hits) {
         d.wake();
-        const dmg = Math.max(0, sp - 5) * 3.5;
-        if (dmg > 0) { const n = d.nearest(veh.pos); d.hurt(n.seg, dmg); d.hurt(null, dmg * 0.5); }
+        const dmg = Math.max(0, close - 5) * 3.5;
+        if (dmg > 0 && d.ramT <= 0) { d.ramT = 0.4; const n = d.nearest(veh.pos); d.hurt(n.seg, dmg); d.hurt(null, dmg * 0.5); }
       }
     }
   }
@@ -420,15 +428,19 @@ export class Ragdolls {
   update(dt, veh, maxSub = 6) {
     if (dt <= 0) return;
     if (veh) this.ram(veh);
-    const steps = Math.min(maxSub, Math.ceil(dt / SUB - 1e-6));
-    const h = dt / steps;
+    this.acc = Math.min((this.acc || 0) + dt, maxSub * SUB);
+    let steps = 0;
+    while (this.acc >= SUB) { this.acc -= SUB; steps++; }
     for (const d of this.dolls) {
+      if (d.ramT > 0) d.ramT -= dt;
       if (d.state === 'rag') {
         let mv = 0;
-        for (let k = 0; k < steps; k++) mv = d.step(h);
-        if (mv < 1e-7) { d.still += dt; if (d.still > 1.5) d.state = 'sleep'; } else d.still = 0;
+        for (let k = 0; k < steps; k++) mv = d.step(SUB);
+        if (steps) { if (mv < 1e-7) { d.still += dt; if (d.still > 1.5) d.state = 'sleep'; } else d.still = 0; }
         d.draw();
       }
+      // knocked off its stand but still standing a chance: back on the stand after a while
+      if (d.home && !d.dead && d.state === 'sleep') { d.downT += dt; if (d.downT > 20) d.reset(); } else d.downT = 0;
       if (d.koPay > 0) { d.koPay -= dt; if (d.koPay <= 0) this.onKO(d); }
       if (d.dead) {
         d.deadT += dt;

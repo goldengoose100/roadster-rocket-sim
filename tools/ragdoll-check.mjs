@@ -10,7 +10,7 @@ const fx = { smoke: { spawn() {} }, fire: { spawn() {} } };
 const R = new Ragdolls(scene, fx);
 const d = R.spawn(new THREE.Vector3(640, 0, -620), 0, 'crash'), b = R.spawn(new THREE.Vector3(650, 0, -620), 0, 'boss');
 let ko = 0; R.onReward = (t, c) => { ko++; console.log('reward', t, c); };
-R.explode(d.pelvis.clone().add(new THREE.Vector3(0, 0.3, 0.3)), 9, 1);
+R.explode(d.p[d.segs[1].ib].clone().add(new THREE.Vector3(0.15, 0, 0)), 1.6, 0.6);
 const h = R.hit(b.p[b.segs[1].ib].clone(), 0.3); if (h) h.applyImpulse(new THREE.Vector3(0, 0, 960), b.p[b.segs[1].ib]);
 for (let i = 0; i < 300; i++) R.update(1 / 60, null);
 const fin = (x) => x.p.every(v => Number.isFinite(v.x + v.y + v.z));

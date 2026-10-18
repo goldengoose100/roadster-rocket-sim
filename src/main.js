@@ -369,7 +369,7 @@ async function boot(hotData = {}) {
     const L = Object.assign(profile.look(), preview);
     const hv = hacks && hacks.unlocked ? hacks.v : null;
     const lucky = luck ? luck.skinOverride() : undefined;   // Good Luck skin swapper wins over the garage
-    const skin = lucky !== undefined ? lucky : preview.paint !== undefined ? null : preview.skin !== undefined ? findSkin(preview.skin) : profile.skin();
+    const skin = preview.paint !== undefined ? null : preview.skin !== undefined ? findSkin(preview.skin) : lucky !== undefined ? lucky : profile.skin();   // garage try-ons first
     if (hv && hv.paint) { model.setSkin(null); model.setPaint({ color: hv.paint, metal: 0.5, rough: 0.3 }); }
     else if (skin && !(hv && (hv.rainbow || hv.disco))) model.setSkin(skin);
     else model.setSkin(null, findItem('paint', L.paint));
