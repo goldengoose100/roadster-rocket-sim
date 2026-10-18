@@ -154,6 +154,7 @@ function drapeGeo(path, prof, colors) {
   g.computeVertexNormals();
   return g;
 }
+function sign(world, x, z, yaw, lines, opts) { if (typeof world.sign === 'function') world.sign(x, z, yaw, lines, opts); }
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function texFrom(c, repeat) {
   const t = new THREE.CanvasTexture(c);
@@ -197,7 +198,6 @@ function padTex() {
 
 // ---------- build ----------
 export function build(world) {
-  const scene = world.scene;
   const M = world.mats || {};
   // shared materials (made once per map load)
   const R = {
@@ -232,11 +232,10 @@ export function build(world) {
   run('beacons', () => buildBeacons(world, R));
   // blinking lights (shared materials, no allocations)
   const cyan = R.blinkCyan, red = R.blinkRed;
-  world.anim.push((t) => {
+  if (Array.isArray(world.anim)) world.anim.push((t) => {
     cyan.emissiveIntensity = (t % 1.4) < 0.55 ? 2.6 : 0.35;
     red.emissiveIntensity = ((t + 0.5) % 1.0) < 0.4 ? 2.8 : 0.3;
   });
-  void scene;
 }
 
 // ---------- Crater Canyon: ring course over and through the bowl, landing pads on the rim ----------
@@ -306,7 +305,7 @@ function buildCanyon(world, R) {
     const gr = groundRange(x, z, hw, hw);
     const top = gr.max + 0.35, bottom = gr.min - 0.6;
     world.box(x, bottom, z, hw * 2, top - bottom, hw * 2, R.plinth, { surface: 'concrete', grip: GRIP.concrete });
-    if (pd.air) {
+    if (pd.air && typeof world.airPad === 'function') {
       // air pad on top of the plinth: build it, then lift what it added onto the plinth top
       const before = world.scene.children.length, nPads = world.refuelPads.length;
       world.airPad(x, z, 10, pd.name);
@@ -317,6 +316,7 @@ function buildCanyon(world, R) {
       const deck = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 - 0.6, hw * 2 - 0.6), R.padTop);
       deck.rotation.x = -Math.PI / 2; deck.position.set(x, top + 0.02, z); deck.receiveShadow = true;
       world.scene.add(deck);
+      if (pd.air) world.refuelPads.push({ x, y: top, z, r: 10, name: pd.name });
     }
     if (Array.isArray(world.landingPads)) world.landingPads.push({ x, z, y: top, name: pd.name });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) R.beacons.cyan.push([x + sx * (hw - 0.8), top, z + sz * (hw - 0.8), 1.4]);
@@ -326,7 +326,7 @@ function buildCanyon(world, R) {
   // sign ahead and to the right of the teleport, facing it
   const fx = Math.sin(tpYaw), fz = Math.cos(tpYaw), lx = Math.cos(tpYaw), lz = -Math.sin(tpYaw);
   const sx = tp[0] + fx * 12 + lx * 16, sz = tp[1] + fz * 12 + lz * 16;
-  world.sign(sx, sz, Math.atan2(tp[0] - sx, tp[1] - sz), ['CRATER CANYON', `rings 1-${pts.length} · the south rim pad refills air`], { w: 16, h: 4 });
+  sign(world, sx, sz, Math.atan2(tp[0] - sx, tp[1] - sz), ['CRATER CANYON', `rings 1-${pts.length} · the south rim pad refills air`], { w: 16, h: 4 });
   R.keepOut.push([sx, sz, 20]);
 }
 
@@ -348,7 +348,6 @@ function buildLander(world, R) {
   const trenchLen = Math.min(105, Math.max(30, (A.cx + A.hw - 12 - cx) / Math.max(0.2, slide.x)));
 
   // --- the lander (built upright in local space, then laid on its side) ---
-  const P = new THREE.Parts ? null : null; void P;
   const parts = new Parts();
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   // descent stage: gold octagon with a dark deck and black foil panels
@@ -394,11 +393,13 @@ function buildLander(world, R) {
   wreck.position.set(cx, gWreck - minY - 0.7, cz);
   scene.add(wreck);
   wreck.updateMatrixWorld(true);
-  for (const [c, h] of [[V(0, 0, 0), V(4.3, 2.2, 4.3)], [V(0, 4.2, 0), V(2.8, 1.9, 2.7)]]) {
+  for (const [c, h] of [[V(0, 0, 0), V(4.4, 2.4, 4.4)], [V(0, 4.2, 0), V(2.8, 1.9, 2.7)]]) {
     addCollider(new OBB(c.clone().applyMatrix4(wreck.matrixWorld), wreck.quaternion, h, { surface: 'metal', grip: GRIP.metal }));
   }
-  R.beacons.red.push([cx + td.x * 15, heightAt(cx + td.x * 15, cz + td.y * 15), cz + td.y * 15, 1.8]);
-  R.beacons.red.push([cx - td.x * 15, heightAt(cx - td.x * 15, cz - td.y * 15), cz - td.y * 15, 1.8]);
+  for (const [a, b] of [[16, 0], [-16, -6]]) {
+    const x = cx + td.x * a + view.x * b, z = cz + td.y * a + view.y * b;
+    R.beacons.red.push([x, heightAt(x, z), z, 1.8]);
+  }
 
   // --- skid trench running back from the wreck ---
   const path = [];
@@ -461,12 +462,12 @@ function buildLander(world, R) {
     bell.add(inner);
     bell.position.set(x, g, z); bell.rotation.y = slideYaw + 1.1;
     scene.add(bell);
-    if (world.d && typeof world.d.target === 'function') world.d.target(bell, new THREE.Vector3(1.4, 1.45, 1.55), 600, 1.35);
-    else addCollider(new OBB(new THREE.Vector3(x, g + 1.35, z), bell.quaternion, new THREE.Vector3(1.4, 1.45, 1.55), { surface: 'metal' }));
+    if (world.d && typeof world.d.target === 'function') world.d.target(bell, new THREE.Vector3(1.5, 1.45, 1.55), 600, 1.35);
+    else addCollider(new OBB(new THREE.Vector3(x, g + 1.35, z), bell.quaternion, new THREE.Vector3(1.5, 1.45, 1.55), { surface: 'metal' }));
   }
   // --- spilled supply crates (destructible blocks) ---
   if (world.d && typeof world.d.structure === 'function') {
-    const x = cx - td.x * 13, z = cz - td.y * 13;
+    const x = cx - td.x * 12 + view.x * 5, z = cz - td.y * 12 + view.y * 5;
     const s = world.d.structure(x, z, slideYaw);
     for (const [lx, lz] of [[-0.65, -0.65], [0.65, -0.65], [-0.65, 0.65], [0.65, 0.65]]) world.d.block(s, lx, 0, lz, 1.2, 1.2, 1.2, 'crate');
     world.d.block(s, 0, 1.2, 0, 1.2, 1.2, 1.2, 'crate');
@@ -505,7 +506,7 @@ function buildLander(world, R) {
   // sign on the left, facing the teleport
   const fx = Math.sin(tpYaw), fz = Math.cos(tpYaw), lx = Math.cos(tpYaw), lz = -Math.sin(tpYaw);
   const sx = tp[0] + fx * 16 - lx * 15, sz = tp[1] + fz * 16 - lz * 15;
-  world.sign(sx, sz, Math.atan2(tp[0] - sx, tp[1] - sz), ['CRASHED LANDER', 'somebody parked badly · mind the debris'], { w: 15, h: 4, stripe: '#e0b040' });
+  sign(world, sx, sz, Math.atan2(tp[0] - sx, tp[1] - sz), ['CRASHED LANDER', 'somebody parked badly · mind the debris'], { w: 15, h: 4, stripe: '#e0b040' });
 }
 
 // ---------- Big Crater: rim beacons, signs, a launch ramp on the far rim ----------
@@ -517,7 +518,7 @@ function buildBigCrater(world, R) {
   // teleport at the end of the road on the south rim, facing +z
   const tp = pickFlat([[0, 520], [0, 512], [0, 505], [0, 528], [0, 496], [5, 515], [-5, 515], [0, 488]], 3, 0.5);
   world.teleports.push({ key: keyOf('crater', 7), name: zoneName('crater', 'Big Crater'), x: tp[0], z: tp[1], yaw: 0 });
-  world.sign(tp[0] + 18, tp[1] + 14, Math.PI - 0.5, ['BIG CRATER', 'drive down the slope · launch off the far rim'], { w: 15, h: 4 });
+  sign(world, tp[0] + 18, tp[1] + 14, Math.atan2(-18, -14), ['BIG CRATER', 'drive down the slope · launch off the far rim'], { w: 15, h: 4 });
 
   // launch ramp: its lip sits on the north rim crest, steeper than the inner slope
   const rN = crest(Math.PI / 2);
@@ -540,7 +541,7 @@ function buildBigCrater(world, R) {
   }
   void w;
   for (const s of [-1, 1]) R.beacons.cyan.push([cx + s * (hw + 2.5), heightAt(cx + s * (hw + 2.5), lipZ - 1), lipZ - 1, 2.2]);
-  world.sign(cx + hw + 9, z0 - 10, Math.PI, ['LAUNCH RAMP', 'full throttle · hold Space to boost'], { w: 12, h: 3.4 });
+  sign(world, cx + hw + 9, z0 - 10, Math.PI, ['LAUNCH RAMP', 'full throttle · hold Space to boost'], { w: 12, h: 3.4 });
 
   // guide lights across the bowl from the teleport to the ramp
   for (let z = tp[1] + 40; z < z0 - 12; z += 45) for (const s of [-1, 1]) R.beacons.amber.push([cx + s * 11, heightAt(cx + s * 11, z), z, 1.2]);
@@ -618,7 +619,7 @@ function buildRoadMarkers(world, R) {
     const len = Math.hypot(bx - ax, bz - az);
     if (len < 30) continue;
     const tx = (bx - ax) / len, tz = (bz - az) / len, nx = tz, nz = -tx;
-    const n = Math.floor(len / 45);
+    const n = Math.max(1, Math.floor(len / 45));
     for (let i = 0; i <= n; i++) {
       const t = i * len / n, side = i % 2 ? 1 : -1;
       const x = ax + tx * t + nx * 12 * side, z = az + tz * t + nz * 12 * side;
@@ -642,12 +643,21 @@ function buildBoulders(world, R) {
   const pebbles = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), R.rock, NS);
   const col = new THREE.Color();
   let k = 0, tries = 0, obbs = 0;
+  const roads = ROADS.filter(r => Math.hypot(r[2] - r[0], r[3] - r[1]) > 60);
   while (k < NB && tries < NB * 30) {
     tries++;
-    const x = (rng() - 0.5) * 2 * MAP_R, z = (rng() - 0.5) * 2 * MAP_R;
+    // the first few are big boulders with colliders beside the roads, the rest small ones anywhere
+    const bigOne = obbs < MAX_ROCK_OBBS - 6 && tries < 2000 && roads.length > 0;
+    let x, z;
+    if (bigOne) {
+      const rd = roads[(rng() * roads.length) | 0], t = rng();
+      const dx = rd[2] - rd[0], dz = rd[3] - rd[1], l = Math.hypot(dx, dz), off = (rng() < 0.5 ? -1 : 1) * (ROAD_HW + MARGIN + 3 + rng() * 55);
+      x = rd[0] + dx * t + dz / l * off; z = rd[1] + dz * t - dx / l * off;
+    } else { x = (rng() - 0.5) * 2 * MAP_R; z = (rng() - 0.5) * 2 * MAP_R; }
     if (!ok(x, z)) continue;
     let r = 0.45 + Math.pow(rng(), 1.5) * 0.95, solid = false;
-    if (rng() < 0.2 && obbs < MAX_ROCK_OBBS && roadDist(x, z) < ROAD_HW + 75 && !inRect(x, z, AREAS.canyon, 0)) { r = 2.2 + rng() * 2.4; solid = true; }
+    if (bigOne && !inRect(x, z, AREAS.canyon, 0)) { r = 2.2 + rng() * 2.4; solid = true; }
+    else if (bigOne) continue;
     const yaw = rng() * Math.PI * 2;
     const g = Math.min(heightAt(x, z), heightAt(x + r * 0.8, z), heightAt(x - r * 0.8, z), heightAt(x, z + r * 0.8), heightAt(x, z - r * 0.8));
     _p.set(x, g + r * 0.7 * 0.3, z);

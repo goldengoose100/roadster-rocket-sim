@@ -3,7 +3,7 @@
 // few landmark towers, rooftop details (water tanks, AC units, blinking antennas, helipads), neon edge
 // strips, vertical blade signs and rooftop billboards. Partly reserved blocks (the drag avenue row) are
 // built only in the parts that stay clear of the reserved rectangle.
-// Visuals are merged per material and per 350 m chunk (~200 meshes in total); every building section
+// Visuals are merged per material and chunk (~160 meshes in total, ~95k triangles); every building section
 // and every rooftop prop the car can hit gets its own axis-aligned OBB collider.
 import * as THREE from 'three';
 import { addCollider, OBB, GRIP } from '../../colliders.js';

@@ -478,7 +478,7 @@ export function build(world) {
   };
   safe('buildings', () => {
     building(420, -455, Math.PI + 0.1, 10, 7, 3);     // doors face the entrance (north)
-    building(585, -450, Math.PI - 0.15, 10, 7, 3);
+    building(585, -450, Math.PI - 0.15, 10, 7, 2);
     building(500, -585, Math.PI, 9, 7, 2);
   });
   safe('walls', () => { wall(440, -395, 0.25, 16, 8); wall(565, -400, -0.25, 12, 7); });

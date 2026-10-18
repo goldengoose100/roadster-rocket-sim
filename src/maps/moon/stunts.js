@@ -82,26 +82,31 @@ export function build(world) {
   }
 
   // Landing tabletop centred on (cx, cz), jump arriving along yaw: up face, flat deck, long down face.
-  // Built on the lowest ground under it so no part floats; returns the deck top height.
+  // Each slope starts flush with the ground at its low end; the deck box reaches down to the lowest
+  // ground under it, and ramp() skirts any gap under the slopes, so nothing floats. Returns the deck top.
   function tabletop(cx, cz, yaw, hw, Lup, Ldeck, Ldown, h, mat) {
     const s = Math.sin(yaw), c = Math.cos(yaw);
     const a0 = -(Ldeck / 2 + Lup), a1 = Ldeck / 2 + Ldown;
-    let yb = Infinity;
-    const n = Math.max(2, Math.ceil((a1 - a0) / 6));
-    for (let i = 0; i <= n; i++) {
-      const l = a0 + (a1 - a0) * i / n;
-      for (const k of [-0.95, 0, 0.95]) yb = Math.min(yb, Y0(cx + s * l + c * k * hw, cz + c * l - s * k * hw));
+    const ux = cx + s * a0, uz = cz + c * a0, dx = cx + s * a1, dz = cz + c * a1;
+    let dmin = Infinity, dmax = -Infinity;
+    for (let i = 0; i <= 6; i++) {
+      const l = -Ldeck / 2 + Ldeck * i / 6;
+      for (const k of [-0.95, 0, 0.95]) {
+        const g = Y0(cx + s * l + c * k * hw, cz + c * l - s * k * hw);
+        dmin = Math.min(dmin, g); dmax = Math.max(dmax, g);
+      }
     }
-    if (!Number.isFinite(yb)) yb = 0;
-    wedgeAt(cx + s * a0, yb, cz + c * a0, yaw, hw, Lup, h, mat);
-    wedgeAt(cx + s * a1, yb, cz + c * a1, yaw + PI, hw, Ldown, h, mat);
-    world.box(cx, yb - 1, cz, hw * 2, h + 1, Ldeck, deckMat, { yaw, surface: 'concrete' });
+    const yTop = Math.max(Y0(ux, uz), Y0(dx, dz), dmax - h * 0.5) + h;
+    ramp(ux, uz, yaw, hw, Lup, Math.max(0.5, yTop - Y0(ux, uz)), mat);
+    ramp(dx, dz, yaw + PI, hw, Ldown, Math.max(0.5, yTop - Y0(dx, dz)), mat);
+    const yb = Math.min(dmin, yTop - h) - 1;
+    world.box(cx, yb, cz, hw * 2, yTop - yb, Ldeck, deckMat, { yaw, surface: 'concrete' });
     // landing target paint on the deck
-    const top = yb + h + 0.03;
+    const top = yTop + 0.03;
     world.quad(cx, cz, hw * 0.9, 0.5, yaw, yellow, top, 1);
     world.quad(cx, cz, 0.5, Ldeck * 0.42, yaw, yellow, top + 0.005, 1);
     for (const k of [-1, 1]) world.quad(cx + c * k * hw * 0.92, cz - s * k * hw * 0.92, 0.35, Ldeck / 2 - 0.4, yaw, paint, top, 1);
-    return yb + h;
+    return yTop;
   }
 
   // Double-sided kicker (roller): rises to a peak at (px, pz) along yaw over Lf, falls over Lr. No walls.
