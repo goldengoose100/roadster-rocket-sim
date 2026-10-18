@@ -2,7 +2,8 @@
 // Since app 1.2.0 an available update opens its own window before the game. Checks: update window ->
 // install -> game on the new version, settings kept, restart stays updated; broken update rolls back and
 // is never offered again; corrupted download is refused and you can still play; offline start is silent
-// and a manual check explains; app-shell changes ask for a full download.
+// and a manual check explains; app-shell changes ask for a full download; an update published while
+// playing closes the game, opens the update window and installs. Exits 1 if any check fails.
 //   node tools/package.mjs --linux && xvfb-run -a node tools/updater-test.mjs out/
 import { _electron } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import { createServer } from 'node:http';
@@ -37,7 +38,7 @@ const marked = (v) => base.replace('<title>', `<meta name="test-build" content="
 // test versions are just above whatever version is bundled in the app
 const BUNDLED = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
 const [MA, MI, PA] = BUNDLED.split('.').map(Number);
-const V1 = `${MA}.${MI}.${PA + 1}`, V2 = `${MA}.${MI}.${PA + 2}`, V3 = `${MA}.${MI}.${PA + 3}`, VSHELL = `${MA + 1}.0.0`;
+const V1 = `${MA}.${MI}.${PA + 1}`, V2 = `${MA}.${MI}.${PA + 2}`, V3 = `${MA}.${MI}.${PA + 3}`, V4 = `${MA}.${MI}.${PA + 4}`, VSHELL = `${MA + 1}.0.0`;
 
 async function launch(env = {}) {
   const app = await _electron.launch({ executablePath: exe, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
@@ -128,5 +129,25 @@ win = await game; await ready(win);
 check('"Play without updating" opens the game', (await version(win)).join() === `${V1},${V1}`);
 await app.close();
 
+// 7. update published while playing: the game closes, the update window pops up, Update now installs it
+publish(V1, marked(V1)); // nothing newer than the installed version at launch
+({ app, first, isUpdater } = await launch({ ROADSTER_CHECK_EVERY: '8000' }));
+let appClosed = false; app.on('close', () => { appClosed = true; });
+await ready(first);
+let gameClosed = false; first.on('close', () => { gameClosed = true; });
+check('starts into the game when nothing new is published', !isUpdater && (await version(first)).join() === `${V1},${V1}`);
+publish(V4, marked(V4));
+const pop = await app.waitForEvent('window', { timeout: 60000 }).catch(() => null);
+const popped = !!pop && (await pop.title()).includes('Update') && (await pop.textContent('#ver')).includes(V4);
+check('update published while playing closes the game and opens the update window', popped && gameClosed && !appClosed, `popped=${popped} gameClosed=${gameClosed} appClosed=${appClosed}`);
+if (popped) {
+  game = nextGame(app);
+  await pop.click('#go');
+  win = await game; await ready(win);
+  check('Update now reopens the game on the new version', (await version(win)).join() === `${V4},${V4}` && !appClosed, (await version(win)).join());
+}
+await app.close();
+
 server.close();
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`);
+process.exit(res.every(Boolean) ? 0 : 1);
