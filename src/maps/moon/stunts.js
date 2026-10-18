@@ -157,6 +157,7 @@ export function build(world) {
   function board(x, z, label, post = 5) {
     const i = LABELS.indexOf(label);
     const y0 = Y0(x, z);
+    post += Math.max(0, -y0);            // inside a crater: tall enough to be seen from the rim
     const p = new THREE.Mesh(new THREE.BoxGeometry(0.18, post, 0.18), darkSteel);
     p.position.set(x, y0 + post / 2, z + 0.12); batch(p);
     const back = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.2, 0.1), darkSteel);

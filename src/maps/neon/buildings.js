@@ -344,7 +344,7 @@ export function build(world) {
     for (const s of [-1, 1]) { const e = new THREE.BoxGeometry(0.2, bh, 0.36); e.translate(s * (bw / 2 + 0.05), lift + bh / 2, 0); put(nm, place(e)); }
     const hx = fi.alongX ? bw / 2 + 0.15 : 0.2, hz = fi.alongX ? 0.2 : bw / 2 + 0.15;
     collide(x, y + (lift + bh + 0.2) / 2, z, hx, (lift + bh + 0.2) / 2, hz, 'metal');
-    stats.billboards++; stats.billboardAt.push([Math.round(x), Math.round(z), wd.word]);
+    stats.billboards++; stats.billboardAt.push([Math.round(x), Math.round(z), wd.word, face.tag, face.n.join(), x0, x1, z0, z1].join(" "));
     return true;
   };
   const roofDetails = (r, faces, x0, x1, z0, z1, y, h) => {
