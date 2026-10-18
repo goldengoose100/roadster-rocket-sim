@@ -222,10 +222,123 @@ if (want('rail')) {
   await ev(() => { window.__sim.weapons.railCharge = 0; });
   await ev(() => { window.__sim.step(240 * 2, {}); });
   check('railgun recharged and fires again', await ev(() => window.__sim.fireAt(640, 3, -770)), '');
-  await page.keyboard.press('Tab');
-  check('Tab back to rockets', await page.waitForFunction(() => window.__sim.weapons.mode === 'rocket', null, { timeout: 30000 }).then(() => true).catch(() => false));
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.press('Tab'); await page.keyboard.up('ShiftLeft');
+  check('Shift+Tab back to rockets', await page.waitForFunction(() => window.__sim.weapons.mode === 'rocket', null, { timeout: 30000 }).then(() => true).catch(() => false));
   await camOff();
   await ev(() => window.__sim.destruction.rebuild());
+}
+
+// ---------- the other Tab weapons ----------
+if (want('weapons')) {
+  const W = (fn, arg) => ev(fn, arg);
+  // step in game-frame sized chunks (30 per second) so per-frame weapon logic runs like in play
+  const fine = (sec, c = {}) => ev(([sec, c]) => { for (let i = 0; i < Math.round(sec * 30); i++) window.__sim.step(8, c); }, [sec, c]);
+  const tab = async (shift) => {
+    const was = await ev(() => window.__sim.weapons.mode);
+    if (shift) await page.keyboard.down('ShiftLeft');
+    await page.keyboard.press('Tab');
+    if (shift) await page.keyboard.up('ShiftLeft');
+    await page.waitForFunction((m) => window.__sim.weapons.mode !== m, was, { timeout: 30000 }).catch(() => {});
+    return ev(() => window.__sim.weapons.mode);
+  };
+  const statics = () => ev(() => window.__sim.destruction.blocks.filter(b => b.state === 'static').length);
+  const setMode = (m) => W((m) => { const w = window.__sim.weapons; w.release(); w.mode = m; for (const k in w.charge) w.charge[k] = 0; }, m);
+  await W(() => { const S = window.__sim; S.destruction.rebuild(); S.weapons.clearSpecials(); S.teleport(8); S.weapons.equip(); S.weapons.mode = 'rocket'; });
+  await fine(1, {});
+  // Tab wheel: 8 presses comes back round, Shift+Tab goes back one
+  const seen = [];
+  for (let i = 0; i < 8; i++) seen.push(await tab(false));
+  const back = await tab(true);
+  await shot('33-weapon-wheel', 200);
+  check('Tab cycles all 8 weapons, Shift+Tab goes back', seen.join() === 'rail,grapple,mine,tractor,emp,laser,blackhole,rocket' && back === 'blackhole', `${seen.join(' ')} · back ${back}`);
+
+  // grapple: hook the building and get reeled toward it, fire again to let go
+  await setMode('grapple'); await place(560, -660, Math.PI); await fine(1, {});
+  const g0 = await ev(() => window.__sim.vehicle.pos.distanceTo(new window.__sim.THREE.Vector3(560, 4, -696.5)));
+  const hooked = await ev(() => window.__sim.fireAt(560, 4, -696.5) && !!window.__sim.weapons.rope && !window.__sim.weapons.rope.body);
+  await cam([585, 12, -650], [560, 3, -680], 55);
+  await fine(2.5, {});
+  await freeze(); await shot('34-grapple', 400); await unfreeze();
+  const g1 = await ev(() => window.__sim.vehicle.pos.distanceTo(new window.__sim.THREE.Vector3(560, 4, -696.5)));
+  const released = await ev(() => window.__sim.fireAt(560, 4, -696.5) && !window.__sim.weapons.rope);
+  check('grapple hooks a wall, reels the car in, fires again to let go', hooked && g1 < g0 - 6 && released, `${g0.toFixed(1)} m -> ${g1.toFixed(1)} m`);
+
+  // tractor beam: lift a parked car, carry it, throw it into a building
+  await setMode('tractor');
+  const car = await ev(() => { const t = window.__sim.destruction.targets.find(t => t.state === 'static' && t.col.c.distanceTo(new window.__sim.THREE.Vector3(640, 0, -700)) < 120); return t ? [t.col.c.x, t.col.c.y, t.col.c.z] : null; });
+  let lifted = false, thrown = false, tractorInfo = 'no parked car';
+  if (car) {
+    await place(car[0] + 18, car[2], -Math.PI / 2); await fine(0.5, {});
+    const grab = await ev((c) => window.__sim.fireAt(c[0], c[1], c[2]), car);
+    await fine(1.5, {});
+    const h = await ev(() => { const w = window.__sim.weapons, v = window.__sim.vehicle; return w.held ? { up: w.held.body.pos.y - v.pos.y, d: w.held.body.pos.distanceTo(v.pos) } : null; });
+    await camNear(10, 5, 10, 50); await freeze(); await shot('35-tractor-beam', 400); await unfreeze(); await camOff();
+    lifted = grab && !!h && h.up > 1.5 && h.d < 14;
+    const b0 = await statics();
+    thrown = await ev(() => window.__sim.fireAt(640, 3, -770)) && await ev(() => !window.__sim.weapons.held && window.__sim.weapons.thrown.length === 1);
+    await fine(2, {});
+    tractorInfo = `held ${JSON.stringify(h)}, blocks knocked by the throw ${b0 - await statics()}`;
+  }
+  check('tractor beam lifts a parked car and throws it', lifted && thrown, tractorInfo);
+
+  // mines: drop, arm, drive over one; an explosion sets off the others
+  await W(() => window.__sim.destruction.rebuild()); await W(() => window.__sim.weapons.clearSpecials());
+  await setMode('mine'); await place(600, -600, 0); await fine(0.5, {});
+  for (let i = 0; i < 3; i++) { await W(() => { window.__sim.weapons.charge.mine = 0; }); await ev(() => window.__sim.fireAt(600, 0, -500)); await fine(0.4, { throttle: 0.6 }); }
+  await fine(2, {});
+  const mines = await ev(() => window.__sim.weapons.mines.map(m => ({ landed: m.landed, x: m.pos.x, y: m.pos.y, z: m.pos.z })));
+  await cam([mines[0]?.x + 6, 4, mines[0]?.z + 6], [mines[0]?.x, 0, mines[0]?.z], 45); await shot('36-mines', 400); await camOff();
+  await place(mines[0].x, mines[0].z + 12, Math.PI, 8); await fine(2.5, { throttle: 0.3 });
+  const left = await ev(() => window.__sim.weapons.mines.length);
+  await ev(() => { const S = window.__sim, m = S.weapons.mines[0]; if (m) S.destruction.explode(m.pos.clone().add(new S.THREE.Vector3(3, 1, 0)), 9, 1); });
+  await fine(1, {});
+  const after = await ev(() => window.__sim.weapons.mines.length);
+  check('mines land, arm, go off under the car and chain with explosions', mines.length === 3 && mines.every(m => m.landed) && left < 3 && after === 0, `placed ${mines.length}, after drive-over ${left}, after blast ${after}`);
+
+  // EMP: stalls the pace car and fries mines
+  await setMode('mine'); await place(600, -600, 0); await fine(0.5, {});
+  await ev(() => window.__sim.fireAt(600, 0, -500)); await fine(1.5, {});
+  const minesBefore = await ev(() => window.__sim.weapons.mines.length);
+  await W(() => { const S = window.__sim; S.paceCar.spawn(S.vehicle, 40); }); await fine(1.5, {});
+  const sp0 = await ev(() => window.__sim.paceCar.speed);
+  await setMode('emp');
+  const emped = await ev(() => window.__sim.fireAt(600, 0, -500));
+  await fine(0.25, {}); await camNear(20, 10, 20, 60); await freeze(); await shot('37-emp', 300); await unfreeze(); await camOff();
+  await fine(3, {});
+  const e = await ev(() => ({ pace: window.__sim.paceCar.speed, mines: window.__sim.weapons.mines.length, recharge: window.__sim.weapons.chargeLeft('emp'), again: window.__sim.fireAt(600, 0, -500) }));
+  check('EMP stalls the pace car, fries mines and has to recharge', emped && sp0 > 5 && e.pace < sp0 * 0.5 && minesBefore === 1 && e.mines === 0 && e.recharge > 0 && !e.again, `pace ${sp0.toFixed(1)} -> ${e.pace.toFixed(1)} m/s, ${JSON.stringify(e)}`);
+  await W(() => window.__sim.paceCar.despawn());
+
+  // orbital laser: burns down through a building and follows the aim
+  await W(() => window.__sim.destruction.rebuild());
+  await setMode('laser'); await place(640, -720, Math.PI); await fine(0.5, {});
+  const l0 = await statics();
+  const lasered = await ev(() => { const ok = window.__sim.fireAt(640, 3, -770); if (ok) window.__sim.weapons.laser.follow = false; return ok; });
+  await cam([610, 30, -735], [640, 6, -770], 55);
+  await fine(2.5, {});
+  await freeze(); await shot('38-orbital-laser', 400); await unfreeze();
+  await fine(3, {});
+  const l1 = await statics();
+  check('orbital laser burns through a building', lasered && l0 - l1 > 10 && await ev(() => !window.__sim.weapons.laser), `blocks ${l0} -> ${l1}`);
+
+  // black hole: pulls debris in, then blasts it out
+  await W(() => window.__sim.destruction.rebuild());
+  await setMode('blackhole'); await place(560, -660, Math.PI); await fine(0.5, {});
+  const h0 = await statics();
+  const thrownHole = await ev(() => window.__sim.fireAt(560, 2, -692));
+  await cam([590, 20, -660], [560, 6, -695], 55);
+  await fine(1.5, {});
+  const pulling = await ev(() => window.__sim.weapons.hole && window.__sim.weapons.hole.phase);
+  await fine(1.5, {});
+  await freeze(); await shot('39-black-hole', 400); await unfreeze();
+  await fine(2.5, {});
+  const h1 = await statics();
+  check('black-hole bomb lands, pulls a building apart, then blasts out', thrownHole && pulling === 'pull' && h0 - h1 > 10 && await ev(() => !window.__sim.weapons.hole), `blocks ${h0} -> ${h1}`);
+  await camOff();
+  // mod-menu buttons drop a laser and a black hole on the crosshair
+  const mod = await ev(() => { const S = window.__sim, H = S.hacks, was = H.unlocked; S.weapons.clearSpecials(); H.unlocked = true; H.action('doLaser'); H.action('doHole'); H.unlocked = was; return { laser: !!S.weapons.laser, hole: S.weapons.hole && S.weapons.hole.phase }; });
+  check('mod menu: orbital laser and black hole at the crosshair', mod.laser && mod.hole === 'pull', JSON.stringify(mod));
+  await W(() => { const S = window.__sim; S.destruction.rebuild(); S.weapons.clearSpecials(); S.weapons.mode = 'rocket'; });
 }
 
 // ---------- slipstream (pace car) ----------

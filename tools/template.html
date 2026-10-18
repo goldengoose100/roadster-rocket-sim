@@ -98,6 +98,12 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 #ammo i { width: 10px; height: 18px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 8px rgba(255,181,71,.6); }
 #ammo i.used { background: rgba(255,181,71,.18); box-shadow: none; }
 
+#wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+#wheel.fade { animation: wheelfade 1.4s ease-out forwards; }
+@keyframes wheelfade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+#wheel span { position: absolute; transform: translate(-50%, -50%); padding: 6px 10px; border-radius: 6px; white-space: nowrap;
+  font: 600 .72rem/1 var(--f-display); letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.7); background: rgba(8,10,14,.62); border: 1px solid rgba(255,255,255,.12); }
+#wheel span.on { color: #111; background: var(--amber); border-color: var(--amber); box-shadow: 0 0 14px rgba(255,181,71,.6); }
 #xh { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
 #xh::before, #xh::after { content: ""; position: absolute; background: var(--amber); box-shadow: 0 0 6px rgba(0,0,0,.8); }
 #xh::before { left: 14px; top: 0; width: 2px; height: 30px; clip-path: polygon(0 0,100% 0,100% 35%,0 35%,0 65%,100% 65%,100% 100%,0 100%); }
@@ -429,6 +435,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
       <div id="ammo" hidden></div>
     </div>
     <div id="xh" hidden></div>
+    <div id="wheel" hidden aria-live="polite"></div>
   </div>
   <div id="cine" hidden><span>CRASH CAM</span></div>
 
@@ -558,7 +565,7 @@ body.touch #toasts { top: calc(250px + env(safe-area-inset-top, 0px)); }
         <div><h3>Weapons</h3><ul>
           <li><span>pickup</span><span>Drive through a launcher at the Weapons Range</span></li>
           <li><span><kbd>Click</kbd><kbd>B</kbd></span><span>Fire at the crosshair</span></li>
-          <li><span><kbd>Tab</kbd></span><span>Switch rockets / railgun (pierces buildings)</span></li>
+          <li><span><kbd>Tab</kbd></span><span>Next weapon (Shift+Tab back): rockets, railgun, grapple, mines, tractor beam, EMP, orbital laser, black hole</span></li>
           <li><span><kbd>Drag</kbd></span><span>Aim / look around</span></li>
           <li><span><kbd>⌫</kbd></span><span>Rebuild everything you blew up</span></li>
         </ul></div>

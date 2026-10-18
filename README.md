@@ -58,6 +58,7 @@ You can also check manually from the pause menu (P).
 | F | Fan suction: Auto, Max, Off | |
 | G | | Flight assist on / manual |
 | Click or B | Fire rocket (after picking up a launcher) | same |
+| Tab / Shift+Tab | Next / previous weapon: rockets, railgun, grapple, mines, tractor beam, EMP, orbital laser, black hole | same |
 | R | Reset car upright | same |
 | G (start screen) | Garage | |
 | V | Camera: chase, far, cockpit, cinematic, orbit | |

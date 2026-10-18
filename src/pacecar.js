@@ -13,7 +13,7 @@ export class PaceCar {
   constructor(scene) {
     this.scene = scene; this.active = false; this.group = null;
     this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.dir = new THREE.Vector3();
-    this.speed = 0; this.target = 50; this.t = 0;
+    this.speed = 0; this.target = 50; this.t = 0; this.stallT = 0;
     this.wake = { pos: this.pos, vel: this.vel, hw: 1.0 };
   }
   build() {
@@ -37,12 +37,16 @@ export class PaceCar {
     this.group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     this.scene.add(this.group);
   }
+  // EMP: the motor cuts out and it coasts to a stop, then drives on
+  stall(sec) { this.stallT = sec; }
   despawn() { this.active = false; if (this.group) this.scene.remove(this.group); }
   // called every physics step so it stays in sync with the car
   update(dt) {
     if (!this.active) return;
     this.t += dt;
-    this.speed += Math.max(-8 * dt, Math.min(7 * dt, this.target - this.speed));
+    if (this.stallT > 0) this.stallT -= dt;
+    const want = this.stallT > 0 ? 0 : this.target;
+    this.speed += Math.max(-8 * dt, Math.min(7 * dt, want - this.speed));
     this.pos.addScaledVector(this.dir, this.speed * dt);
     const probe = this.pos.clone(); probe.y += 4;
     const d = groundBelow(probe, 30);
@@ -50,6 +54,7 @@ export class PaceCar {
     this.vel.copy(this.dir).multiplyScalar(this.speed);
     this.group.position.copy(this.pos);
     this.mat.uniforms.time.value = this.t;
+    this.mat.uniforms.col.value.set(this.stallT > 0 && Math.random() < 0.5 ? '#1b3a44' : '#5fe4ff');
     if (this.t > 90 || Math.hypot(this.pos.x, this.pos.z) > 1700) this.despawn();
   }
 }

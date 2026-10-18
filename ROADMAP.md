@@ -21,7 +21,7 @@ Each session builds one block, tests it (existing suites + new tests), and ships
 - The Moon: 0.17 g, craters, Earth in the sky, air lasts ~6x longer
 - Neon city at night: streets, tunnels, rooftop ramps, parking garages to wall-ride, glowing signs, wet roads
 
-## Session 4: Weapons
+## Session 4: Weapons (railgun in 2.1.0; grapple, mines, tractor beam, EMP, orbital laser, black hole and the Tab wheel built, not released yet; ammo crates still to do)
 - Weapon wheel on Tab, ammo crates around the map
 - Railgun (pierces buildings), grapple hook, mines, tractor beam (lift and throw debris), EMP (drops drones, stalls cars),
   orbital laser, black-hole bomb (pulls in debris, then blasts it out)
