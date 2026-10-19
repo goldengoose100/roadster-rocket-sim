@@ -1,13 +1,11 @@
 {
-  "version": "2.5.0",
-  "file": "game-2.5.0.html",
-  "sha256": "6647ee5496fb7bf891f6485d567d3f0ad330faf1235af772786e64f2bea5a494",
-  "size": 1583009,
+  "version": "2.5.1",
+  "file": "game-2.5.1.html",
+  "sha256": "aec2a563af12234645323777a2e82a98c15fcc56ac49351ecfef28570be5ae60",
+  "size": 1583430,
   "minShell": "1.1.0",
-  "date": "2026-10-18",
+  "date": "2026-10-19",
   "notes": [
-    "Two new maps! Pick The Moon or Neon City on the start screen",
-    "The Moon: 1/6 gravity, craters, a lunar base, giant low-gravity jumps, a mine to blow up and Earth in the sky",
-    "Neon City: a night city with skyscrapers, a neon tunnel, an elevated skyway and a demolition yard"
+    "Fixed: picking The Moon or Neon City on the start screen now loads the map straight away"
   ]
 }

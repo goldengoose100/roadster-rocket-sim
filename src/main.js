@@ -37,6 +37,10 @@ import { findSkin, SKINS } from './skins.js';
 
 const $ = (id) => document.getElementById(id);
 const DT = PHYS.DT;
+// The page exactly as it was loaded, and which copy of the game this is: switching maps in the desktop
+// app restarts the game in the same window (the app doesn't allow reloading the page).
+const ORIGINAL_HTML = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+const GEN = (window.__rrsGen = (window.__rrsGen || 0) + 1);
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 // ---------- persistent settings ----------
@@ -1075,7 +1079,7 @@ async function boot(hotData = {}) {
   });
 
   // shown once after updating to that exact version (a bugfix release without an entry shows nothing)
-  const WHATS_NEW = { '2.5.0': ['Two new maps! Pick The Moon or Neon City on the start screen', 'The Moon: 1/6 gravity, craters, a lunar base, giant jumps and Earth in the sky', 'Neon City: a night city with skyscrapers, a neon tunnel, an elevated skyway and a demolition yard'], '2.4.1': ['8 more silly cars in the Good Luck menu: toilet, bathtub, shopping cart, couch, cheese wedge, pizza slice, giant sneaker and burger', 'Ragdolls fly the same at any frame rate, knocked-down dummies climb back on their stands, and other fixes'], '2.4.0': ['Ragdoll dummies in the Weapons Range: 7 kinds with HP bars, including a giant BOSS', 'Limbs come off where you hit them (Blood can be turned off in the pause menu)', 'Earn credits for every knockout'], '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a rubber duck and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
+  const WHATS_NEW = { '2.5.1': ['Fixed: picking The Moon or Neon City on the start screen now loads the map straight away'], '2.5.0': ['Two new maps! Pick The Moon or Neon City on the start screen', 'The Moon: 1/6 gravity, craters, a lunar base, giant jumps and Earth in the sky', 'Neon City: a night city with skyscrapers, a neon tunnel, an elevated skyway and a demolition yard'], '2.4.1': ['8 more silly cars in the Good Luck menu: toilet, bathtub, shopping cart, couch, cheese wedge, pizza slice, giant sneaker and burger', 'Ragdolls fly the same at any frame rate, knocked-down dummies climb back on their stands, and other fixes'], '2.4.0': ['Ragdoll dummies in the Weapons Range: 7 kinds with HP bars, including a giant BOSS', 'Limbs come off where you hit them (Blood can be turned off in the pause menu)', 'Earn credits for every knockout'], '2.3.0': ['A secret Good Luck menu (you need its code): silly cars like a banana, a rubber duck and a hot dog, a skin swapper and silly mods'], '2.2.0': ['Car skin cases: Street and Elite, with 5 rarities (Garage → Skins)', '14 new guns. Press Tab / Shift+Tab to switch, hold the mouse for auto-fire', 'Loads of new mod-menu cheats, including 50 secret Dev skins', 'A new in-game update screen and this What\'s new screen'] };
   // ---------- desktop app updater (only inside the .exe) ----------
   const desk = window.desktop;
   if (desk) {
@@ -1135,6 +1139,16 @@ async function boot(hotData = {}) {
     };
   }
 
+  // start the game again on the saved map: a page reload in a browser; in the desktop app (which blocks
+  // reloads) stop this copy and write a fresh copy of the page into the same window
+  const restartGame = () => {
+    if (!window.desktop) { location.reload(); return; }
+    window.__rrsGen = GEN + 1;   // stops this copy's frame loop
+    try { if (sound.ctx) sound.ctx.close(); } catch (_) { /* already closed */ }
+    try { renderer.dispose(); renderer.forceContextLoss(); } catch (_) { /* context already gone */ }
+    document.open(); document.write(ORIGINAL_HTML); document.close();
+  };
+
   // ---------- map look (sky, fog, stars, Earth) and the map picker (2.5) ----------
   let mapEnv = null;
   if (MAP && MAP.env) { try { mapEnv = applyMapEnv(MAP.env, { THREE, scene, camera, renderer, fog, sky, skyMat, sun, hemi, setTimeOfDay }); } catch (e) { console.warn('map look', e); } }
@@ -1142,7 +1156,7 @@ async function boot(hotData = {}) {
     new MapPicker({
       maps: [{ id: 'desert', name: 'Desert Test Site', desc: 'The original: ramps, loop, canyon, weapons range', col: '#ffb547' }, ...Object.values(MAPS).map(m => ({ id: m.id, name: m.name, desc: m.desc, col: m.col }))],
       current: MAP ? MAP.id : 'desert',
-      onPick: (id) => { settings.map = id; saveSettings(); setTimeout(() => location.reload(), 150); },
+      onPick: (id) => { settings.map = id; saveSettings(); setTimeout(() => restartGame(), 150); },
     });
   } catch (e) { console.warn('map picker', e); }
 
@@ -1159,6 +1173,7 @@ async function boot(hotData = {}) {
 
   let last = performance.now();
   const frame = (now) => {
+    if (window.__rrsGen !== GEN) return;   // a newer copy of the game has taken over (map switch)
     requestAnimationFrame(frame);
     const rawDt = Math.max(0, (now - last) / 1000);
     let dt = Math.min(0.1, rawDt); last = now;
